@@ -39,6 +39,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Badge } from "@/components/ui/badge";
 
 export default function ConfigPage() {
   const tenant = useTenant();
@@ -56,7 +57,7 @@ export default function ConfigPage() {
       />
       <PageBody>
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-1 sm:grid-cols-3">
             <TabsTrigger value="general">Geral</TabsTrigger>
             <TabsTrigger value="institutions">Instituições</TabsTrigger>
             <TabsTrigger value="danger">Perigo</TabsTrigger>
@@ -124,7 +125,7 @@ function GeneralSettings() {
           <Label>Nome da Instituição</Label>
           <Input value={name ?? ""} onChange={(e) => setName(e.target.value)} disabled={!canAdmin} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label>Cidade</Label>
             <Input value={city ?? ""} onChange={(e) => setCity(e.target.value)} disabled={!canAdmin} />
@@ -170,7 +171,7 @@ function InstitutionsList() {
       </CardHeader>
       <CardContent className="space-y-2">
         {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-        {memberships.map(m => {
+        {memberships.map((m: any) => {
           const isActive = m.institution_id === active?.institutionId;
           return (
             <div key={m.institution_id} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${isActive ? "border-primary/50 bg-primary/5" : ""}`}>
@@ -183,7 +184,7 @@ function InstitutionsList() {
           );
         })}
       </CardContent>
-      <CardFooter className="flex justify-between">
+      <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <CreateInstitutionDialog />
         <Button asChild variant="outline">
           <Link href="/onboarding">Trocar de instituição</Link>
@@ -238,7 +239,7 @@ function CreateInstitutionDialog() {
               <p className="mt-1 text-xs text-destructive">{form.formState.errors.name.message}</p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="city">Cidade</Label>
               <Input id="city" {...form.register("city")} />
@@ -282,7 +283,7 @@ function DangerZone() {
         <CardDescription>Ações irreversíveis. Tenha muito cuidado.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between rounded-lg border border-dashed border-destructive/50 p-4">
+        <div className="flex flex-col text-center sm:flex-row sm:text-left sm:items-center sm:justify-between gap-4 rounded-lg border border-dashed border-destructive/50 p-4">
           <div>
             <h3 className="font-semibold">Excluir esta instituição</h3>
             <p className="text-sm text-muted-foreground">Todo o conteúdo será permanentemente apagado.</p>

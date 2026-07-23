@@ -232,38 +232,40 @@ export default function TurmasPage() {
         }
       />
       <PageBody>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Curso</TableHead>
-                <TableHead>Período</TableHead>
-                <TableHead>Polos</TableHead>
-                {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : groupedTurmas.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Nenhuma turma cadastrada.</TableCell></TableRow>
-              ) : (
-                groupedTurmas.map((t) => (
-                  <TableRow key={t.groupKey}>
-                    <TableCell className="font-medium">{nameMap.get(t.course_id) ?? "—"}</TableCell>
-                    <TableCell>{t.period ?? "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {t.polo_ids.map(pid => <Badge key={pid} variant="secondary">{nameMap.get(pid) ?? '?'}</Badge>)}
-                      </div>
-                    </TableCell>
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : groupedTurmas.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhuma turma cadastrada.</div>
+            ) : (
+              <div className="space-y-4">
+                {groupedTurmas.map((t) => (
+                  <div key={t.groupKey} className="rounded-lg border bg-card p-4">
+                    <div className="font-semibold">{nameMap.get(t.course_id) ?? "—"}</div>
+                    <div className="text-sm text-muted-foreground">{t.period ?? "—"}</div>
+                    
+                    <div className="mt-2 text-sm font-medium">Polos:</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {t.polo_ids.map(pid => <Badge key={pid} variant="secondary">{nameMap.get(pid) ?? '?'}</Badge>)}
+                    </div>
+
                     {canEdit && (
-                      <TableCell className="text-right">
-                        <Button size="icon" variant="ghost" onClick={() => { setEditing(t); setFormOpen(true); }}>
-                          <Pencil className="h-4 w-4" />
+                      <div className="mt-4 flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setEditing(t); setFormOpen(true); }}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
                         </Button>
                         <AlertDialog>
-                          <AlertDialogTrigger asChild><Button size="icon" variant="ghost"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </Button>
+                          </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
@@ -277,13 +279,68 @@ export default function TurmasPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </TableCell>
+                      </div>
                     )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Curso</TableHead>
+                  <TableHead>Período</TableHead>
+                  <TableHead>Polos</TableHead>
+                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
+                ) : groupedTurmas.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Nenhuma turma cadastrada.</TableCell></TableRow>
+                ) : (
+                  groupedTurmas.map((t) => (
+                    <TableRow key={t.groupKey}>
+                      <TableCell className="font-medium">{nameMap.get(t.course_id) ?? "—"}</TableCell>
+                      <TableCell>{t.period ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {t.polo_ids.map(pid => <Badge key={pid} variant="secondary">{nameMap.get(pid) ?? '?'}</Badge>)}
+                        </div>
+                      </TableCell>
+                      {canEdit && (
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => { setEditing(t); setFormOpen(true); }}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild><Button size="icon" variant="ghost"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir o grupo de turmas do curso "{nameMap.get(t.course_id)}" para o período {t.period}? Todos os polos associados serão desfeitos.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => del.mutate(t.turma_ids)}>Excluir</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
     </>

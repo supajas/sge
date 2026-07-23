@@ -159,59 +159,47 @@ export default function DisciplinasPage() {
         }
       />
       <PageBody>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Curso</TableHead>
-                <TableHead>Carga horária</TableHead>
-                {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Nenhuma disciplina cadastrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell>{courseMap.get(s.course_id) ?? "—"}</TableCell>
-                    <TableCell>{s.workload_hours ?? "—"}</TableCell>
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : data.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhuma disciplina cadastrada.</div>
+            ) : (
+              <div className="space-y-4">
+                {data.map((s) => (
+                  <div key={s.id} className="rounded-lg border bg-card p-4">
+                    <div className="font-semibold">{s.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Curso: {courseMap.get(s.course_id) ?? "—"}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Carga Horária: {s.workload_hours ?? "—"}h
+                    </div>
                     {canEdit && (
-                      <TableCell className="text-right">
+                      <div className="mt-4 flex justify-end gap-2">
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
                             setEditing(s);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="icon" variant="ghost">
-                              <Trash2 className="h-4 w-4" />
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Tem certeza que deseja excluir a disciplina "{s.name}"? Esta ação
-                                não pode ser desfeita.
+                                Tem certeza que deseja excluir a disciplina "{s.name}"? Esta ação não pode ser desfeita.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -222,13 +210,86 @@ export default function DisciplinasPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </TableCell>
+                      </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Curso</TableHead>
+                  <TableHead>Carga horária</TableHead>
+                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                      Nenhuma disciplina cadastrada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell>{courseMap.get(s.course_id) ?? "—"}</TableCell>
+                      <TableCell>{s.workload_hours ?? "—"}</TableCell>
+                      {canEdit && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditing(s);
+                              setFormOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir a disciplina "{s.name}"? Esta ação
+                                  não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => del.mutate(s.id)}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
     </>

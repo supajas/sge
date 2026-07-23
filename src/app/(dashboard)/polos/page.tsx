@@ -135,59 +135,44 @@ export default function PolosPage() {
         }
       />
       <PageBody>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Cidade</TableHead>
-                <TableHead>Estado</TableHead>
-                {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Nenhum polo cadastrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell>{p.city ?? "—"}</TableCell>
-                    <TableCell>{p.state ?? "—"}</TableCell>
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : data.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhum polo cadastrado.</div>
+            ) : (
+              <div className="space-y-4">
+                {data.map((p) => (
+                  <div key={p.id} className="rounded-lg border bg-card p-4">
+                    <div className="font-semibold">{p.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {p.city ?? "—"}, {p.state ?? "—"}
+                    </div>
                     {canEdit && (
-                      <TableCell className="text-right">
+                      <div className="mt-4 flex justify-end gap-2">
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
                             setEditing(p);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="icon" variant="ghost">
-                              <Trash2 className="h-4 w-4" />
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Tem certeza que deseja excluir o polo "{p.name}"? Esta ação não
-                                pode ser desfeita.
+                                Tem certeza que deseja excluir o polo "{p.name}"? Esta ação não pode ser desfeita.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -198,13 +183,86 @@ export default function PolosPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </TableCell>
+                      </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Cidade</TableHead>
+                  <TableHead>Estado</TableHead>
+                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                      Nenhum polo cadastrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>{p.city ?? "—"}</TableCell>
+                      <TableCell>{p.state ?? "—"}</TableCell>
+                      {canEdit && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditing(p);
+                              setFormOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir o polo "{p.name}"? Esta ação não
+                                  pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => del.mutate(p.id)}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
     </>

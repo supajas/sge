@@ -20,3 +20,6 @@ guia.md
 *.pem
 .vscode/
 .idea/
+
+# Supabase
+migrations/

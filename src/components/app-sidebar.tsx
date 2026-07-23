@@ -9,6 +9,7 @@ import {
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -44,6 +45,7 @@ const ADMIN_ONLY: NavItem[] = [
 export function AppSidebar() {
   const { active } = useTenant();
   const pathname = usePathname();
+  const { setOpenMobile } = useSidebar();
   const role = active?.role;
   const admin = isAdminLike(role);
 
@@ -59,7 +61,7 @@ export function AppSidebar() {
           {items.map((item) => (
             <SidebarMenuItem key={item.url}>
               <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                <Link href={item.url}>
+                <Link href={item.url} onClick={() => setOpenMobile(false)}>
                   <item.icon />
                   <span>{item.title}</span>
                 </Link>

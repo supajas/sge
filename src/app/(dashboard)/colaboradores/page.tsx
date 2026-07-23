@@ -133,98 +133,176 @@ export default function ColaboradoresPage() {
         }
       />
       <PageBody>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Perfil</TableHead>
-                <TableHead>Polos</TableHead>
-                {canAdmin && <TableHead className="w-24 text-right"></TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((m) => (
-                  <TableRow key={m.membershipId}>
-                    <TableCell>
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : data.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhum colaborador encontrado.</div>
+            ) : (
+              <div className="space-y-4">
+                {data.map((m) => (
+                  <div key={m.membershipId} className="rounded-lg border bg-card p-4">
+                    <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-10 w-10">
                           {m.avatar && <AvatarImage src={m.avatar} />}
                           <AvatarFallback>{m.name?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
                         </Avatar>
-                        <span className="font-medium">{m.name}</span>
+                        <div>
+                          <div className="font-semibold">{m.name}</div>
+                          <div className="text-sm text-muted-foreground">{m.email}</div>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell>{m.email}</TableCell>
-                    <TableCell>
                       <Badge variant={m.role === "owner" ? "default" : "secondary"}>
                         {ROLE_LABELS[m.role]}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {m.polos.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
+                    </div>
+
+                    {m.polos.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium">Polos:</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {m.polos.map((p) => (
-                            <Badge key={p.id} variant="outline">
-                              {p.name}
-                            </Badge>
+                            <Badge key={p.id} variant="outline">{p.name}</Badge>
                           ))}
                         </div>
-                      )}
-                    </TableCell>
-                    {canAdmin && (
-                      <TableCell className="text-right">
-                        {m.role !== "owner" && (
-                          <>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              title="Editar"
-                              onClick={() => setEditing(m)}
-                            >
-                              <Pencil className="h-4 w-4" />
+                      </div>
+                    )}
+
+                    {canAdmin && m.role !== "owner" && (
+                      <div className="mt-4 flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditing(m)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Remover
                             </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="icon" variant="ghost" title="Remover">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Tem certeza que deseja remover o acesso de {m.name} a esta
-                                    instituição?
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
-                                    Remover
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tem certeza que deseja remover o acesso de {m.name} a esta instituição?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
+                                Remover
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Perfil</TableHead>
+                  <TableHead>Polos</TableHead>
+                  {canAdmin && <TableHead className="w-24 text-right"></TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((m) => (
+                    <TableRow key={m.membershipId}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            {m.avatar && <AvatarImage src={m.avatar} />}
+                            <AvatarFallback>{m.name?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{m.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{m.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={m.role === "owner" ? "default" : "secondary"}>
+                          {ROLE_LABELS[m.role]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {m.polos.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {m.polos.map((p) => (
+                              <Badge key={p.id} variant="outline">
+                                {p.name}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                      {canAdmin && (
+                        <TableCell className="text-right">
+                          {m.role !== "owner" && (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                title="Editar"
+                                onClick={() => setEditing(m)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="icon" variant="ghost" title="Remover">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja remover o acesso de {m.name} a esta
+                                      instituição?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
+                                      Remover
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
 

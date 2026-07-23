@@ -230,67 +230,50 @@ export default function AlunosPage() {
             className="max-w-sm"
           />
         </div>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Matrícula</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Turma</TableHead>
-                <TableHead>Status</TableHead>
-                {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Nenhum aluno encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono text-xs">{s.registration}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {classMap.get(s.class_id) ?? "—"}
-                    </TableCell>
-                    <TableCell>
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : filtered.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhum aluno encontrado.</div>
+            ) : (
+              <div className="space-y-4">
+                {filtered.map((s) => (
+                  <div key={s.id} className="rounded-lg border bg-card p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{s.name}</span>
                       <Badge variant="secondary">
                         {STATUS_OPTIONS.find((x) => x.value === s.status)?.label}
                       </Badge>
-                    </TableCell>
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      <p><span className="font-medium text-foreground">Matrícula:</span> {s.registration}</p>
+                      <p><span className="font-medium text-foreground">Turma:</span> {classMap.get(s.class_id) ?? "—"}</p>
+                    </div>
                     {canEdit && (
-                      <TableCell className="text-right">
+                      <div className="mt-4 flex justify-end gap-2">
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
                             setEditing(s);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="icon" variant="ghost">
-                              <Trash2 className="h-4 w-4" />
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Tem certeza que deseja excluir o aluno "{s.name}"? Esta ação não
-                                pode ser desfeita.
+                                Tem certeza que deseja excluir o aluno "{s.name}"? Esta ação não pode ser desfeita.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -301,13 +284,94 @@ export default function AlunosPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </TableCell>
+                      </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Matrícula</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Turma</TableHead>
+                  <TableHead>Status</TableHead>
+                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      Nenhum aluno encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-mono text-xs">{s.registration}</TableCell>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {classMap.get(s.class_id) ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {STATUS_OPTIONS.find((x) => x.value === s.status)?.label}
+                        </Badge>
+                      </TableCell>
+                      {canEdit && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditing(s);
+                              setFormOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir o aluno "{s.name}"? Esta ação não
+                                  pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => del.mutate(s.id)}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
     </>

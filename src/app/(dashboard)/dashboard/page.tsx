@@ -43,8 +43,15 @@ export default function DashboardPage() {
       />
       <PageBody>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map((c) => (
-            <Card key={c.label}>
+          {cards.map((c, index) => (
+            <Card
+              key={c.label}
+              style={{
+                animation: `fadeInUp 0.5s ease-out forwards`,
+                animationDelay: `${index * 100}ms`,
+                opacity: 0,
+              }}
+            >
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{c.label}</span>

@@ -124,48 +124,22 @@ export default function ConvitesPage() {
         }
       />
       <PageBody>
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Perfil</TableHead>
-                <TableHead>Expira</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-40 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                    Nenhum convite ainda.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((i) => {
+        <div>
+          {/* Mobile View: Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+            ) : data.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">Nenhum convite ainda.</div>
+            ) : (
+              <div className="space-y-4">
+                {data.map((i) => {
                   const expired = new Date(i.expires_at).getTime() < Date.now();
                   const used = !!i.used_at;
                   return (
-                    <TableRow key={i.id}>
-                      <TableCell className="font-mono text-xs">{i.code}</TableCell>
-                      <TableCell>{i.email ?? "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {new Date(i.expires_at).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell>
+                    <div key={i.id} className="rounded-lg border bg-card p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="font-mono text-sm">{i.code}</div>
                         {used ? (
                           <Badge>Usado</Badge>
                         ) : expired ? (
@@ -173,36 +147,37 @@ export default function ConvitesPage() {
                         ) : (
                           <Badge variant="secondary">Ativo</Badge>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
+                      </div>
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        <p><span className="font-medium text-foreground">Email:</span> {i.email ?? "Qualquer um"}</p>
+                        <p><span className="font-medium text-foreground">Perfil:</span> {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}</p>
+                        <p><span className="font-medium text-foreground">Expira:</span> {new Date(i.expires_at).toLocaleDateString("pt-BR")}</p>
+                      </div>
+                      <div className="mt-4 flex justify-end gap-2">
                         <Button
-                          size="icon"
-                          variant="ghost"
-                          title="Copiar link"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
                             navigator.clipboard.writeText(link(i.code));
                             toast.success("Link copiado");
                           }}
                         >
-                          <Copy className="h-4 w-4" />
+                          <Copy className="mr-2 h-4 w-4" /> Copiar
                         </Button>
                         <Button
-                          size="icon"
-                          variant="ghost"
-                          title="WhatsApp"
+                          size="sm"
+                          variant="outline"
                           onClick={() => {
-                            const msg = `Você foi convidado para ${tenant.active?.name}. Aceite: ${link(
-                              i.code
-                            )}`;
+                            const msg = `Você foi convidado para ${tenant.active?.name}. Aceite: ${link(i.code)}`;
                             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
                           }}
                         >
-                          <MessageCircle className="h-4 w-4" />
+                          <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="icon" variant="ghost" title="Excluir">
-                              <Trash2 className="h-4 w-4" />
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -220,13 +195,119 @@ export default function ConvitesPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </div>
                   );
-                })
-              )}
-            </TableBody>
-          </Table>
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Table */}
+          <div className="hidden rounded-lg border bg-card md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Perfil</TableHead>
+                  <TableHead>Expira</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-40 text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                      Nenhum convite ainda.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.map((i) => {
+                    const expired = new Date(i.expires_at).getTime() < Date.now();
+                    const used = !!i.used_at;
+                    return (
+                      <TableRow key={i.id}>
+                        <TableCell className="font-mono text-xs">{i.code}</TableCell>
+                        <TableCell>{i.email ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {new Date(i.expires_at).toLocaleDateString("pt-BR")}
+                        </TableCell>
+                        <TableCell>
+                          {used ? (
+                            <Badge>Usado</Badge>
+                          ) : expired ? (
+                            <Badge variant="outline">Expirado</Badge>
+                          ) : (
+                            <Badge variant="secondary">Ativo</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Copiar link"
+                            onClick={() => {
+                              navigator.clipboard.writeText(link(i.code));
+                              toast.success("Link copiado");
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="WhatsApp"
+                            onClick={() => {
+                              const msg = `Você foi convidado para ${tenant.active?.name}. Aceite: ${link(
+                                i.code
+                              )}`;
+                              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                            }}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost" title="Excluir">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir o convite de código "{i.code}"?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => del.mutate(i.id)}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </PageBody>
     </>

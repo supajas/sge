@@ -11,6 +11,13 @@ import { useTenant } from "@/lib/tenant";
 import { PageBody, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -498,7 +505,65 @@ function StepGrades({
             <ArrowLeft className="mr-1 h-4 w-4" /> Trocar disciplina
           </Button>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Mobile View: Accordion */}
+        <div className="md:hidden">
+          <Accordion type="multiple" className="w-full">
+            {students.map((s) => {
+              const computedAverage = computeAverage(fields, s.id, gradeMap);
+              return (
+                <AccordionItem value={s.id} key={s.id}>
+                  <AccordionTrigger>
+                    <div className="text-left">
+                      <div className="font-medium">{s.name}</div>
+                      {s.registration && (
+                        <div className="text-xs text-muted-foreground">{s.registration}</div>
+                      )}
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3 pt-2">
+                      {fields.map((f) => {
+                        const g = gradeMap.get(`${s.id}:${f.id}`);
+                        const displayVal = f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
+                        if (f.kind === "average") {
+                          return (
+                            <div key={f.id} className="flex items-center justify-between rounded-md bg-muted p-3">
+                              <Label>{f.label}</Label>
+                              <span className="text-sm font-medium">
+                                {computedAverage != null ? computedAverage.toFixed(2) : "—"}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={f.id}>
+                            <Label className="text-xs font-medium text-muted-foreground">{f.label}</Label>
+                            <Input
+                              defaultValue={displayVal}
+                              key={`${s.id}:${f.id}:${displayVal}`}
+                              onBlur={(e) => {
+                                const newVal = e.target.value.trim();
+                                if (newVal === displayVal) return;
+                                upsert.mutate({ studentId: s.id, field: f, value: newVal });
+                              }}
+                              className="h-9 mt-1"
+                              placeholder={f.kind === "status" ? "Ex.: Aprovado" : "—"}
+                              inputMode={f.kind === "status" ? "text" : "decimal"}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow>

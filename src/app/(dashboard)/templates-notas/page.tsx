@@ -284,7 +284,73 @@ function TemplateCard({
         )}
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border">
+        {/* Mobile View: list of fields */}
+        <div className="md:hidden">
+          <div className="space-y-3">
+            {template.fields.map(f => (
+              <div key={f.id} className="rounded-lg border bg-muted/30 p-3">
+                {canEdit ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <Input
+                        defaultValue={f.label}
+                        onBlur={(e) => e.target.value !== f.label && updField.mutate({ id: f.id, label: e.target.value })}
+                        className="h-8 flex-1 font-medium"
+                      />
+                      <Button size="icon" variant="ghost" onClick={() => delField.mutate(f.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Tipo</Label>
+                        <Select
+                          value={f.kind}
+                          onValueChange={(v) => updField.mutate({ id: f.id, kind: v as Field["kind"] })}
+                        >
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="score">Nota</SelectItem>
+                            <SelectItem value="average">Média</SelectItem>
+                            <SelectItem value="status">Situação</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Peso</Label>
+                        <Input
+                          type="number" step="0.1" defaultValue={f.weight}
+                          onBlur={(e) => Number(e.target.value) !== f.weight && updField.mutate({ id: f.id, weight: Number(e.target.value) })}
+                          className="h-8" disabled={f.kind !== "score"}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Máx</Label>
+                        <Input
+                          type="number" step="0.1" defaultValue={f.max_value}
+                          onBlur={(e) => Number(e.target.value) !== f.max_value && updField.mutate({ id: f.id, max_value: Number(e.target.value) })}
+                          className="h-8" disabled={f.kind === "status"}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-medium">{f.label}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {KIND_LABEL[f.kind]}
+                      {f.kind === 'score' && ` · Peso: ${f.weight}`}
+                      {f.kind !== 'status' && ` · Máx: ${f.max_value}`}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop View: grid table */}
+        <div className="hidden rounded-md border md:block">
           <div className="grid grid-cols-[24px_1fr_140px_100px_100px_40px] gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
             <span />
             <span>Rótulo</span>

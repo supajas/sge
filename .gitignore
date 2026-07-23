@@ -1,0 +1,22 @@
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment variables
+.env*.local
+
+# Documentação
+documentação.md
+guia.md
+
+# IDE & OS
+.DS_Store
+*.pem
+.vscode/
+.idea/

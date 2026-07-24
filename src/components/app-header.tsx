@@ -91,11 +91,6 @@ export function AppHeader({
               <div className="text-xs text-muted-foreground">{userEmail}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {active && (
-              <DropdownMenuItem asChild>
-                <Link href="/select-institution">Trocar instituição</Link>
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onSelect={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" /> Sair
             </DropdownMenuItem>

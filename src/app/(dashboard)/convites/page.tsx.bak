@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Copy, MessageCircle, Trash2, Pencil } from "lucide-react";
+import { Plus, Copy, MessageCircle, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { PageBody, PageHeader } from "@/components/page";
@@ -46,30 +46,26 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { createInviteAction, updateInviteAction } from "./actions";
+import { createInviteAction } from "./actions";
 import { Checkbox } from "@/components/ui/checkbox";
-
-type Invite = ReturnType<typeof useQuery<Awaited<ReturnType<typeof fetchInvites>>>>["data"][0];
-
-async function fetchInvites(institutionId: string) {
-  const { data, error } = await supabase
-    .from("invites")
-    .select("*")
-    .eq("institution_id", institutionId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data;
-}
 
 export default function ConvitesPage() {
   const tenant = useTenant();
   const qc = useQueryClient();
-  const [isCreateOpen, setCreateOpen] = useState(false);
-  const [editingInvite, setEditingInvite] = useState<Invite | null>(null);
+  const [open, setOpen] = useState(false);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["invites", tenant.active?.institutionId],
-    queryFn: () => fetchInvites(tenant.active!.institutionId),
+    queryFn: async () => {
+      if (!tenant.active) return [];
+      const { data, error } = await supabase
+        .from("invites")
+        .select("*")
+        .eq("institution_id", tenant.active.institutionId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
     enabled: !!tenant.active?.institutionId,
   });
 
@@ -81,32 +77,6 @@ export default function ConvitesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invites"] });
       toast.success("Convite removido");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const update = useMutation({
-    mutationFn: async (v: {
-      id: string;
-      email: string;
-      role: AppRole | "none";
-      expires_in_days: number;
-      polo_ids: string[];
-    }) => {
-      if (!tenant.active) throw new Error("No active institution");
-      return updateInviteAction({
-        id: v.id,
-        institution_id: tenant.active.institutionId,
-        email: v.email || null,
-        role: v.role === "none" ? null : (v.role as "admin" | "coord_geral" | "coord_polo"),
-        expires_in_days: v.expires_in_days,
-        polo_ids: v.polo_ids,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invites"] });
-      setEditingInvite(null);
-      toast.success("Convite atualizado");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -130,7 +100,7 @@ export default function ConvitesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invites"] });
-      setCreateOpen(false);
+      setOpen(false);
       toast.success("Convite criado");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -150,37 +120,16 @@ export default function ConvitesPage() {
         title="Convites"
         description="Convide colaboradores por email, link ou WhatsApp."
         actions={
-          <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
+          <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="mr-1 h-4 w-4" /> Novo convite
               </Button>
             </DialogTrigger>
-            <InviteForm 
-              onSubmit={(v) => create.mutate(v)} 
-              pending={create.isPending} 
-            />
+            <InviteForm onSubmit={(v) => create.mutate(v)} pending={create.isPending} />
           </Dialog>
         }
       />
-
-      <Dialog open={!!editingInvite} onOpenChange={(open) => !open && setEditingInvite(null)}>
-        {editingInvite && (
-          <InviteForm
-            key={editingInvite.id}
-            initialData={{
-              email: editingInvite.email ?? "",
-              role: (editingInvite.role as AppRole) ?? "none",
-              expires_in_days: Math.max(1, Math.ceil((new Date(editingInvite.expires_at).getTime() - Date.now()) / 86400_000)),
-              polo_ids: editingInvite.polo_ids ?? [],
-            }}
-            onSubmit={(v) => update.mutate({ ...v, id: editingInvite.id })}
-            pending={update.isPending}
-            isEditing
-          />
-        )}
-      </Dialog>
-
       <PageBody>
         <div>
           {/* Mobile View: Cards */}
@@ -194,7 +143,6 @@ export default function ConvitesPage() {
                 {data.map((i) => {
                   const expired = new Date(i.expires_at).getTime() < Date.now();
                   const used = !!i.used_at;
-                  const active = !expired && !used;
                   return (
                     <div key={i.id} className="rounded-lg border bg-card p-4">
                       <div className="flex items-start justify-between">
@@ -212,7 +160,7 @@ export default function ConvitesPage() {
                         <p><span className="font-medium text-foreground">Perfil:</span> {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}</p>
                         <p><span className="font-medium text-foreground">Expira:</span> {new Date(i.expires_at).toLocaleDateString("pt-BR")}</p>
                       </div>
-                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      <div className="mt-4 flex justify-end gap-2">
                         <Button
                           size="sm"
                           variant="outline"
@@ -233,11 +181,6 @@ export default function ConvitesPage() {
                         >
                           <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
                         </Button>
-                        {active && (
-                          <Button size="sm" variant="outline" onClick={() => setEditingInvite(i)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                          </Button>
-                        )}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button size="sm" variant="destructive">
@@ -297,7 +240,6 @@ export default function ConvitesPage() {
                   data.map((i) => {
                     const expired = new Date(i.expires_at).getTime() < Date.now();
                     const used = !!i.used_at;
-                    const active = !expired && !used;
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="font-mono text-xs">{i.code}</TableCell>
@@ -344,11 +286,6 @@ export default function ConvitesPage() {
                           >
                             <MessageCircle className="h-4 w-4" />
                           </Button>
-                          {active && (
-                            <Button size="icon" variant="ghost" title="Editar" onClick={() => setEditingInvite(i)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button size="icon" variant="ghost" title="Excluir">
@@ -385,18 +322,9 @@ export default function ConvitesPage() {
 }
 
 function InviteForm({
-  initialData,
-  isEditing,
   onSubmit,
   pending,
 }: {
-  initialData?: {
-    email: string;
-    role: AppRole | "none";
-    expires_in_days: number;
-    polo_ids: string[];
-  };
-  isEditing?: boolean;
   onSubmit: (v: {
     email: string;
     role: AppRole | "none";
@@ -406,10 +334,10 @@ function InviteForm({
   pending: boolean;
 }) {
   const tenant = useTenant();
-  const [email, setEmail] = useState(initialData?.email ?? "");
-  const [role, setRole] = useState<AppRole | "none">(initialData?.role ?? "none");
-  const [days, setDays] = useState(initialData?.expires_in_days ?? 7);
-  const [poloIds, setPoloIds] = useState<string[]>(initialData?.polo_ids ?? []);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<AppRole | "none">("none");
+  const [days, setDays] = useState(7);
+  const [poloIds, setPoloIds] = useState<string[]>([]);
 
   const { data: polos = [] } = useQuery({
     queryKey: ["polos", tenant.active?.institutionId],
@@ -432,7 +360,7 @@ function InviteForm({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{isEditing ? "Editar convite" : "Novo convite"}</DialogTitle>
+        <DialogTitle>Novo convite</DialogTitle>
       </DialogHeader>
       <form
         onSubmit={(e) => {
@@ -507,7 +435,7 @@ function InviteForm({
         </div>
         <DialogFooter>
           <Button type="submit" disabled={pending || !canSubmit}>
-            {pending ? (isEditing ? "Salvando..." : "Criando...") : (isEditing ? "Salvar alterações" : "Criar convite")}
+            {pending ? "Criando..." : "Criar convite"}
           </Button>
         </DialogFooter>
       </form>

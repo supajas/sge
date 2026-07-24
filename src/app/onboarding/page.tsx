@@ -23,7 +23,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ROLE_LABELS, type AppRole } from "@/lib/roles";
 import { toast } from "sonner";
-import { bootstrapInstitutionAction, previewInviteAction, redeemInviteAction } from "./actions";
+import { bootstrapInstitutionAction } from "./actions";
+import { previewInviteAction, redeemInviteAction } from "@/lib/actions/invites";
 
 const instSchema = z.object({
   name: z.string().trim().min(2, "Mínimo 2 caracteres").max(120),
@@ -63,7 +64,6 @@ export default function OnboardingPage() {
       }
 
       try {
-        // Busca todas as instituições vinculadas ao usuário
         const { data, error } = await supabase
           .from("memberships")
           .select(
@@ -87,15 +87,12 @@ export default function OnboardingPage() {
         setMemberships(list);
 
         if (list.length === 1) {
-          // Se o usuário tem exatamente 1 instituição, entra direto!
           localStorage.setItem("active_institution_id", list[0].institution_id);
-          router.replace("/dashboard");
+          window.location.href = "/dashboard";
           return;
         } else if (list.length > 1) {
-          // Se tem 2 ou mais, mostra a tela de seleção
           setStep("select");
         } else {
-          // 0 instituições -> mostra o menu padrão de criação/convite
           setStep("menu");
         }
       } catch (err) {
@@ -118,7 +115,6 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16">
-      {/* Botão de Voltar */}
       {step !== "menu" && step !== "select" && (
         <button
           onClick={() => setStep(memberships.length > 0 ? "select" : "menu")}
@@ -133,7 +129,7 @@ export default function OnboardingPage() {
           memberships={memberships}
           onSelect={(instId) => {
             localStorage.setItem("active_institution_id", instId);
-            router.replace("/dashboard");
+            window.location.href = "/dashboard";
           }}
           onCreateNew={() => setStep("create")}
           onUseInvite={() => setStep("invite")}
@@ -298,7 +294,7 @@ function CreateForm() {
                 <p className="mt-1 text-xs text-destructive">{form.formState.errors.name.message}</p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="city">Cidade</Label>
                 <Input id="city" {...form.register("city")} />
@@ -343,12 +339,7 @@ function InviteForm() {
   });
 
   const redeemMut = useMutation({
-    mutationFn: async () =>
-      redeemInviteAction({
-        code,
-        role: previewData?.found && previewData.needsRole ? (chosenRole || null) : null,
-        polo_ids: previewData?.found && previewData.needsPolo ? chosenPolos : [],
-      }),
+    mutationFn: redeemInviteAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
       toast.success("Convite aceito!");
@@ -423,7 +414,11 @@ function InviteForm() {
               <Button
                 className="flex-1"
                 disabled={!canSubmit || redeemMut.isPending}
-                onClick={() => redeemMut.mutate()}
+                onClick={() => redeemMut.mutate({
+                  code,
+                  role: previewData?.found && previewData.needsRole ? (chosenRole || null) : null,
+                  polo_ids: previewData?.found && previewData.needsPolo ? chosenPolos : [],
+                })}
               >
                 {redeemMut.isPending ? "Aceitando..." : "Aceitar convite"}
               </Button>
@@ -453,7 +448,7 @@ function InviteForm() {
           <Button
             className="w-full"
             disabled={!code || previewMut.isPending}
-            onClick={() => previewMut.mutate()}
+            onClick={() => previewMut.mutate({ code })}
           >
             {previewMut.isPending ? "Validando..." : "Continuar"}
           </Button>

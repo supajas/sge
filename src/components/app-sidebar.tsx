@@ -106,8 +106,13 @@ export function AppSidebar() {
 }
 
 function PremiumCard() {
+  const { setOpenMobile } = useSidebar();
   return (
-    <div className="relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 via-background to-background p-3 shadow-sm">
+    <Link
+      href="/premium"
+      onClick={() => setOpenMobile(false)}
+      className="relative block overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 via-background to-background p-3 shadow-sm transition hover:border-primary/60"
+    >
       <div className="flex items-center gap-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground/5 text-foreground">
           <Sparkles className="h-3.5 w-3.5" />
@@ -115,14 +120,13 @@ function PremiumCard() {
         <span className="text-xs font-medium tracking-tight">SGE Premium</span>
       </div>
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-        Notas, relatórios avançados e histórico de aprovações.
+        Desbloqueie relatórios, IA e mais.
       </p>
-      <button
-        type="button"
-        className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-foreground/80 transition hover:text-foreground"
+      <div
+        className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-primary/80 transition group-hover:text-primary"
       >
         Conhecer <ArrowRight className="h-3 w-3" />
-      </button>
-    </div>
+      </div>
+    </Link>
   );
 }

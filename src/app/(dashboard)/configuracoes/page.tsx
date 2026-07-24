@@ -89,7 +89,7 @@ function GeneralSettings() {
   // Effect to sync form state with tenant data when it becomes available
   useEffect(() => {
     if (tenant.active) {
-      setName(tenant.active.name ?? "");
+      setName(tenant.active.institutionName ?? "");
       setCity(tenant.active.city ?? "");
       setState(tenant.active.state ?? "");
     }
@@ -148,20 +148,7 @@ function GeneralSettings() {
 }
 
 function InstitutionsList() {
-  const { user, active } = useTenant();
-  const { data: memberships = [], isLoading } = useQuery({
-    queryKey: ["memberships", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from("memberships")
-        .select("institution_id, institutions!inner(name)")
-        .eq("user_id", user.id);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { memberships, active, loading } = useTenant();
 
   return (
     <Card className="max-w-xl">
@@ -170,14 +157,14 @@ function InstitutionsList() {
         <CardDescription>Você pode criar ou entrar em outras instituições.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-        {memberships.map((m: any) => {
-          const isActive = m.institution_id === active?.institutionId;
+        {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+        {memberships.map((m) => {
+          const isActive = m.institutionId === active?.institutionId;
           return (
-            <div key={m.institution_id} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${isActive ? "border-primary/50 bg-primary/5" : ""}`}>
+            <div key={m.institutionId} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${isActive ? "border-primary/50 bg-primary/5" : ""}`}>
               <div className="flex items-center gap-3">
                 <Building2 className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                <p className={`font-medium ${isActive ? "text-primary" : ""}`}>{m.institutions?.name}</p>
+                <p className={`font-medium ${isActive ? "text-primary" : ""}`}>{m.institutionName}</p>
               </div>
               {isActive && <Badge variant="secondary">Ativa</Badge>}
             </div>

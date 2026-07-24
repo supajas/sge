@@ -1,13 +1,8 @@
 "use client";
 
-
 import { LockKeyhole } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useActiveTenant } from "@/lib/tenant";
-
-export const Route = createFileRoute("/_authenticated/sem-acesso")({
-  component: SemAcessoPage,
-});
 
 export default function Page() {
   const active = useActiveTenant();

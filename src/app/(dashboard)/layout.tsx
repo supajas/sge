@@ -32,14 +32,14 @@ function Inner({
   children: React.ReactNode;
   session: ReturnType<typeof useSession>["session"];
 }) {
-  const { memberships, active, loading } = useTenant();
+  const { memberships, active, loading, isDataLoaded } = useTenant();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !isDataLoaded) return; // Espera os dados estarem carregados
     if (memberships.length === 0) { router.replace("/onboarding"); return; }
-    if (!active && memberships.length > 1) { router.replace("/select-institution"); return; }
+    if (!active && memberships.length > 0) { router.replace("/select-institution"); return; }
     if (active && active.isPoloScoped && active.scopedPoloIds.length === 0) {
       if (pathname !== "/sem-acesso") router.replace("/sem-acesso");
       return;
@@ -50,9 +50,15 @@ function Inner({
     if (active && active.isPoloScoped && active.scopedPoloIds.length > 0 && pathname === "/sem-acesso") {
       router.replace("/dashboard");
     }
-  }, [loading, memberships, active, router, pathname]);
+  }, [loading, isDataLoaded, memberships, active, router, pathname]);
 
-  if (loading || !active) return <div className="min-h-screen bg-background" />;
+  // 1. Guarda de carregamento inicial dos dados
+  if (loading || !isDataLoaded) return <div className="min-h-screen bg-background" />;
+
+  // 2. Guarda de transição: Se o active for null ou sem vínculos, exibe a tela neutra enquanto o router.replace navega
+  if (!active || memberships.length === 0) {
+    return <div className="min-h-screen bg-background" />;
+  }
 
   const meta = session?.user?.user_metadata as
     | { full_name?: string; name?: string; avatar_url?: string }
@@ -61,7 +67,8 @@ function Inner({
   const email = session?.user?.email ?? "";
   const avatar = meta?.avatar_url ?? null;
 
-  const noPoloAccess = active.isPoloScoped && active.scopedPoloIds.length === 0;
+  // 3. Uso do optional chaining (?.) para prevenir quebras inesperadas em active
+  const noPoloAccess = Boolean(active?.isPoloScoped && (active?.scopedPoloIds?.length ?? 0) === 0);
 
   if (noPoloAccess) {
     return (

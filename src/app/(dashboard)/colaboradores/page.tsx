@@ -106,8 +106,8 @@ export default function ColaboradoresPage() {
       await removeMembershipAction({ membership_id: id });
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships-list"] });
       toast.success("Colaborador removido");
-      // Revalidation is handled by the server action
     },
     onError: (e: Error) => toast.error(e.message),
   });

@@ -16,7 +16,7 @@ function generateCode(len = 8): string {
 const createInviteSchema = z.object({
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable().optional(),
+  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable(),
   expires_in_days: z.number().int().min(1).max(90).default(7),
   single_use: z.boolean().default(true),
   polo_ids: z.array(z.string().uuid()).optional(),
@@ -63,7 +63,7 @@ export async function createInviteAction(input: unknown) {
       code,
       institution_id: data.institution_id,
       email: data.email ?? null,
-      role: data.role ?? null,
+      role: data.role ?? null, // Use data.role directly, which can be null
       polo_ids: data.polo_ids ?? [],
       expires_at: expires,
       single_use: data.single_use,
@@ -81,7 +81,7 @@ const updateInviteSchema = z.object({
   id: z.string().uuid(),
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable().optional(),
+  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable(),
   expires_in_days: z.number().int().min(1).max(90),
   polo_ids: z.array(z.string().uuid()).optional(),
 });
@@ -122,7 +122,7 @@ export async function updateInviteAction(input: unknown) {
     .from("invites")
     .update({
       email: data.email ?? null,
-      role: data.role ?? null,
+      role: data.role ?? null, // Use data.role directly, which can be null
       polo_ids: data.polo_ids ?? [],
       expires_at: expires,
     })

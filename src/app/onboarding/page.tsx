@@ -86,11 +86,8 @@ export default function OnboardingPage() {
         const list = (data || []) as unknown as UserMembership[];
         setMemberships(list);
 
-        if (list.length === 1) {
-          localStorage.setItem("active_institution_id", list[0].institution_id);
-          window.location.href = "/dashboard";
-          return;
-        } else if (list.length > 1) {
+        // Se tem 1 ou mais instituições, exibe a tela de seleção
+        if (list.length >= 1) {
           setStep("select");
         } else {
           setStep("menu");
@@ -159,7 +156,9 @@ function SelectInstitutionList({
     <>
       <h1 className="text-2xl font-semibold tracking-tight">Suas Instituições</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Você pertence a mais de uma instituição. Escolha qual deseja acessar.
+        {memberships.length > 1
+          ? "Você pertence a mais de uma instituição. Escolha qual deseja acessar."
+          : "Selecione para acessar ou adicione um novo vínculo."}
       </p>
 
       <div className="mt-6 space-y-3">

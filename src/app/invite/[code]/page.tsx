@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { previewInviteAction, redeemInviteAction } from "@/lib/actions/invites";
 import { useSession } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +36,7 @@ export default function InvitePage({ params }: { params: { code: string } }) {
 
   const { session, loading: sessionLoading } = useSession();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [role, setRole] = useState<"coord_geral" | "coord_polo" | "">("");
   const [polos, setPolos] = useState<string[]>([]);
@@ -48,8 +49,33 @@ export default function InvitePage({ params }: { params: { code: string } }) {
 
   const redeem = useMutation({
     mutationFn: redeemInviteAction,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data?.institutionId) {
+        const userId = session?.user?.id;
+        if (data.updatedMemberships && userId) {
+          // Manually construct the cache shape expected by useTenant's query
+          const poloIdsByMembership: Record<string, string[]> = {};
+          for (const m of data.updatedMemberships) {
+            poloIdsByMembership[m.id] = (m.coordinator_polos ?? []).map(
+              (c: { polo_id: string }) => c.polo_id,
+            );
+          }
+          const memberships = data.updatedMemberships.map(m => ({
+            membershipId: m.id,
+            institutionId: m.institution_id,
+            institutionName: (m.institutions as any).name,
+            city: (m.institutions as any).city,
+            state: (m.institutions as any).state,
+            logoUrl: (m.institutions as any).logo_url,
+            role: m.role as AppRole,
+          }));
+
+          queryClient.setQueryData(["memberships", userId], { memberships, poloIdsByMembership });
+        } else {
+          // Fallback to simple invalidation if priming fails
+          await queryClient.removeQueries({ queryKey: ["memberships"] });
+        }
+        
         localStorage.setItem("active_institution_id", data.institutionId);
         toast.success("Convite aceito! Bem-vindo(a).");
         window.location.href = "/dashboard";

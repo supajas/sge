@@ -125,6 +125,15 @@ export async function redeemInviteAction(input: RedeemInput) {
       .single();
     if (memErr || !created) throw new Error(memErr?.message ?? "Falha ao criar vínculo");
     membershipId = created.id;
+  } else {
+    // If membership already exists, update the role if the invite specifies one
+    if (finalRole) {
+      const { error: updateMemError } = await supabase
+        .from("memberships")
+        .update({ role: finalRole })
+        .eq("id", membershipId);
+      if (updateMemError) throw new Error(updateMemError.message);
+    }
   }
 
   if (inv.course_ids?.length) {
@@ -137,14 +146,33 @@ export async function redeemInviteAction(input: RedeemInput) {
     );
   }
 
+  console.log("RedeemInviteAction: finalPolos before upsert/delete:", finalPolos);
+
+  // Always upsert coordinator_polos if finalPolos are provided
   if (finalPolos.length) {
-    await supabase.from("coordinator_polos").upsert(
+    const { error: upsertError } = await supabase.from("coordinator_polos").upsert(
       finalPolos.map((pid: string) => ({
         membership_id: membershipId!,
         polo_id: pid,
       })),
       { onConflict: "membership_id,polo_id" },
     );
+    if (upsertError) {
+      console.error("RedeemInviteAction: Error during coordinator_polos upsert:", upsertError);
+      throw new Error(upsertError.message);
+    }
+    console.log("RedeemInviteAction: coordinator_polos upsert successful for membershipId:", membershipId, "polos:", finalPolos);
+  } else {
+    // If no polos are specified in the invite, ensure any existing polo associations for this membership are removed
+    const { error: deleteError } = await supabase
+      .from("coordinator_polos")
+      .delete()
+      .eq("membership_id", membershipId!);
+    if (deleteError) {
+      console.error("RedeemInviteAction: Error during coordinator_polos delete:", deleteError);
+      throw new Error(deleteError.message);
+    }
+    console.log("RedeemInviteAction: coordinator_polos deleted for membershipId:", membershipId);
   }
 
   if (inv.single_use) {
@@ -164,5 +192,18 @@ export async function redeemInviteAction(input: RedeemInput) {
   });
 
   revalidatePath("/(dashboard)", "layout");
-  return { institutionId: inv.institution_id };
+
+  // Fetch the complete, updated memberships data to prime the client-side cache
+  const { data: membershipsData, error: membershipsError } = await supabase
+    .from("memberships")
+    .select("id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id)")
+    .eq("user_id", user.id);
+
+  if (membershipsError) {
+    // Even if this fails, the main action succeeded, so we proceed but log the error
+    console.error("Failed to fetch updated memberships after invite redemption:", membershipsError);
+    return { institutionId: inv.institution_id, updatedMemberships: null };
+  }
+
+  return { institutionId: inv.institution_id, updatedMemberships: membershipsData };
 }

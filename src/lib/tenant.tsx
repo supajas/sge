@@ -29,6 +29,7 @@ type TenantContextValue = {
   active: ActiveTenant | null;
   setActive: (institutionId: string) => void;
   loading: boolean;
+  isDataLoaded: boolean; // Nova propriedade
   refetch: () => void;
 };
 
@@ -40,12 +41,14 @@ export function TenantProvider({ userId, children }: { userId: string; children:
     return localStorage.getItem(STORAGE_KEY);
   });
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["memberships", userId],
     queryFn: async (): Promise<{ memberships: TenantMembership[]; poloIdsByMembership: Record<string, string[]> }> => {
       const { data, error } = await supabase
         .from("memberships")
-        .select("id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id)")
+        .select(
+          "id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id, polos(id, name))"
+        )
         .eq("user_id", userId);
       if (error) throw error;
       const memberships: TenantMembership[] = [];
@@ -77,7 +80,9 @@ export function TenantProvider({ userId, children }: { userId: string; children:
   const memberships = data?.memberships ?? [];
   const base =
     memberships.find((m) => m.institutionId === activeId) ??
-    (memberships.length === 1 ? memberships[0] : null);
+    (memberships.length > 0
+      ? null
+      : undefined);
 
   const active: ActiveTenant | null = base
     ? {
@@ -87,9 +92,7 @@ export function TenantProvider({ userId, children }: { userId: string; children:
       }
     : null;
 
-  useEffect(() => {
-    if (active) localStorage.setItem(STORAGE_KEY, active.institutionId);
-  }, [active]);
+  const isDataLoaded = !isLoading && !isFetching && data !== undefined; // Nova flag
 
   return (
     <TenantContext.Provider
@@ -100,7 +103,8 @@ export function TenantProvider({ userId, children }: { userId: string; children:
           setActiveId(id);
           localStorage.setItem(STORAGE_KEY, id);
         },
-        loading: isLoading,
+        loading: isLoading || isFetching,
+        isDataLoaded, // Expondo a nova flag
         refetch,
       }}
     >

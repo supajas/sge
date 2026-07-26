@@ -101,6 +101,16 @@ export default function ColaboradoresPage() {
     enabled: !!tenant.active?.institutionId,
   });
 
+  const save = useMutation({
+    mutationFn: updateMembershipAction,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["memberships-list"] });
+      toast.success("Colaborador atualizado");
+      setEditing(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       await removeMembershipAction({ membership_id: id });
@@ -312,7 +322,8 @@ export default function ColaboradoresPage() {
           row={editing}
           institutionId={tenant.active.institutionId}
           onClose={() => setEditing(null)}
-          onSaved={() => setEditing(null)}
+          onSave={save.mutate}
+          isSaving={save.isPending}
         />
       )}
     </>
@@ -323,12 +334,14 @@ function EditMembershipDialog({
   row,
   institutionId,
   onClose,
-  onSaved,
+  onSave,
+  isSaving,
 }: {
   row: Row;
   institutionId: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSave: (vars: { membership_id: string; role: AppRole; polo_ids: string[] }) => void;
+  isSaving: boolean;
 }) {
   const [role, setRole] = useState<AppRole>(row.role);
   const [selected, setSelected] = useState<string[]>(row.polos.map((p) => p.id));
@@ -344,21 +357,6 @@ function EditMembershipDialog({
       if (error) throw error;
       return data ?? [];
     },
-  });
-
-  const save = useMutation({
-    mutationFn: async () => {
-      await updateMembershipAction({
-        membership_id: row.membershipId,
-        role: role as "admin" | "coord_geral" | "coord_polo",
-        polo_ids: role === "coord_polo" ? selected : [],
-      });
-    },
-    onSuccess: () => {
-      toast.success("Colaborador atualizado");
-      onSaved();
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   const showPolos = role === "coord_polo";
@@ -414,10 +412,16 @@ function EditMembershipDialog({
             Cancelar
           </Button>
           <Button
-            disabled={save.isPending || (showPolos && selected.length === 0)}
-            onClick={() => save.mutate()}
+            disabled={isSaving || (showPolos && selected.length === 0)}
+            onClick={() =>
+              onSave({
+                membership_id: row.membershipId,
+                role: role,
+                polo_ids: showPolos ? selected : [],
+              })
+            }
           >
-            {save.isPending ? "Salvando..." : "Salvar"}
+            {isSaving ? "Salvando..." : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>

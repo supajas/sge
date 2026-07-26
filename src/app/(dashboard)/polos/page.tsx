@@ -50,13 +50,15 @@ export default function PolosPage() {
   const canEdit = tenant.active ? isAdminLike(tenant.active.role) : false;
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ["polos", tenant.active?.institutionId],
+    queryKey: ["polos", tenant.active?.institutionId, tenant.active?.isPoloScoped],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("polos")
-        .select("id, name, city, state")
-        .eq("institution_id", tenant.active!.institutionId)
-        .order("name");
+      let query = supabase.from("polos").select("id, name, city, state");
+      if (tenant.active!.isPoloScoped) {
+        query = query.in("id", tenant.active!.scopedPoloIds);
+      } else {
+        query = query.eq("institution_id", tenant.active!.institutionId);
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return data as Polo[];
     },

@@ -53,13 +53,16 @@ export default function CursosPage() {
   const canEdit = tenant.active ? isAdminLike(tenant.active.role) : false;
 
   const { data: polos = [] } = useQuery({
-    queryKey: ["polos", tenant.active?.institutionId],
+    queryKey: ["polos", tenant.active?.institutionId, tenant.active?.isPoloScoped],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("polos")
-        .select("id, name")
-        .eq("institution_id", tenant.active!.institutionId)
-        .order("name");
+      if (!tenant.active) return [];
+      let query = supabase.from("polos").select("id, name");
+      if (tenant.active.isPoloScoped) {
+        query = query.in("id", tenant.active.scopedPoloIds);
+      } else {
+        query = query.eq("institution_id", tenant.active.institutionId);
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return (data ?? []) as Polo[];
     },
@@ -67,20 +70,28 @@ export default function CursosPage() {
   });
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ["courses", tenant.active?.institutionId],
+    queryKey: ["courses", tenant.active?.institutionId, tenant.active?.isPoloScoped],
     queryFn: async () => {
       if (!tenant.active) return [];
-      const { data, error } = await supabase
-        .from("courses")
-        .select("id, name, code, course_polos(polo_id)")
-        .eq("institution_id", tenant.active.institutionId)
-        .order("name");
+      let query;
+      if (tenant.active.isPoloScoped) {
+        query = supabase
+          .from("courses")
+          .select("id, name, code, course_polos!inner(polo_id)")
+          .in("course_polos.polo_id", tenant.active.scopedPoloIds);
+      } else {
+        query = supabase
+          .from("courses")
+          .select("id, name, code, course_polos(polo_id)")
+          .eq("institution_id", tenant.active.institutionId);
+      }
+      const { data, error } = await query.order("name");
       if (error) throw error;
       return (data ?? []).map((c) => ({
         id: c.id,
         name: c.name,
         code: c.code,
-        polo_ids: (c.course_polos ?? []).map((cp) => cp.polo_id),
+        polo_ids: (c.course_polos ?? []).map((cp: any) => cp.polo_id),
       })) as Course[];
     },
     enabled: !!tenant.active?.institutionId,

@@ -98,7 +98,20 @@ export async function redeemInviteAction(input: RedeemInput) {
   }
 
   if (finalPolos.length) {
-    const { data: polosOk } = await supabase
+    // This validation must run with admin privileges to bypass the user's RLS,
+    // as the user is not yet a member of the institution at this point.
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          persistSession: false, // Desativa persistência de sessão para chamadas admin
+        },
+      }
+    );
+
+    const { data: polosOk } = await supabaseAdmin
       .from("polos")
       .select("id")
       .eq("institution_id", inv.institution_id)

@@ -4,13 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { MapPin, BookOpen, Layers, GraduationCap } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useActiveTenant } from "@/lib/tenant";
+import { useSession } from "@/lib/session";
 import { PageBody, PageHeader } from "@/components/page";
 import { Card, CardContent } from "@/components/ui/card";
 import { ROLE_LABELS } from "@/lib/roles";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const active = useActiveTenant();
-  const { data } = useQuery({
+  const { user, loading: isLoadingUser } = useSession();
+
+  const { data, isLoading: isLoadingStats } = useQuery({
     queryKey: ["dashboard-stats", active.institutionId],
     queryFn: async () => {
       const [polos, courses, classes, students] = await Promise.all([
@@ -26,19 +30,37 @@ export default function DashboardPage() {
         students: students.count ?? 0,
       };
     },
+    enabled: !!active.institutionId,
   });
 
+  if (isLoadingUser || !user) {
+    return (
+      <>
+        <PageHeader title="Carregando..." description="Aguarde um instante" />
+        <PageBody>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-[120px] w-full" />
+            ))}
+          </div>
+        </PageBody>
+      </>
+    );
+  }
+
+  const poloCount = active.isPoloScoped ? active.scopedPoloIds.length : data?.polos;
+
   const cards = [
-    { label: "Polos", value: data?.polos ?? "—", icon: MapPin },
-    { label: "Cursos", value: data?.courses ?? "—", icon: BookOpen },
-    { label: "Turmas", value: data?.classes ?? "—", icon: Layers },
-    { label: "Alunos", value: data?.students ?? "—", icon: GraduationCap },
+    { label: "Polos", value: isLoadingStats ? "..." : poloCount ?? "—", icon: MapPin },
+    { label: "Cursos", value: isLoadingStats ? "..." : data?.courses ?? "—", icon: BookOpen },
+    { label: "Turmas", value: isLoadingStats ? "..." : data?.classes ?? "—", icon: Layers },
+    { label: "Alunos", value: isLoadingStats ? "..." : data?.students ?? "—", icon: GraduationCap },
   ];
 
   return (
     <>
       <PageHeader
-        title={`Olá, ${active.institutionName}`}
+        title={`Olá, ${user.user_metadata.full_name}`}
         description={`Você está como ${ROLE_LABELS[active.role]}.`}
       />
       <PageBody>

@@ -1,34 +1,28 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { ChevronRight, ArrowLeft, Save } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  BookOpen,
+  MapPin,
+  Layers,
+  ClipboardList,
+  Inbox,
+} from "lucide-react";
+
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { PageBody, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+import { Breadcrumbs } from "./breadcrumbs";
+import { StepGrades } from "./step-grades";
 
 const searchSchema = z.object({
   course: z.string().optional(),
@@ -69,8 +63,9 @@ export default function NotasPage() {
 
   if (!tenant.active) {
     return (
-      <div className="p-6">
-        <p>Carregando...</p>
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48 rounded-md" />
+        <Skeleton className="h-12 w-full rounded-lg" />
       </div>
     );
   }
@@ -79,7 +74,7 @@ export default function NotasPage() {
     <>
       <PageHeader
         title="Central de Notas"
-        description="Selecione curso, polo, turma e disciplina para lançar as notas."
+        description="Selecione o fluxo desejado para consultar ou lançar as notas dos alunos."
       />
       <PageBody>
         <Breadcrumbs
@@ -132,68 +127,12 @@ export default function NotasPage() {
   );
 }
 
-function Breadcrumbs({
-  course,
-  polo,
-  klass,
-  subject,
-  institutionId,
-}: {
-  course: string;
-  polo: string;
-  klass: string;
-  subject: string;
-  institutionId: string;
-}) {
-  const { data: names = {} } = useQuery({
-    queryKey: ["notas-names", institutionId, course, polo, klass, subject],
-    queryFn: async () => {
-      const out: Record<string, string> = {};
-      const ids = [course, polo, klass, subject].filter(Boolean);
-      if (!ids.length) return out;
-      const [c, p, cl, s] = await Promise.all([
-        course
-          ? supabase.from("courses").select("id, name").eq("id", course).maybeSingle()
-          : null,
-        polo ? supabase.from("polos").select("id, name").eq("id", polo).maybeSingle() : null,
-        klass ? supabase.from("classes").select("id, name").eq("id", klass).maybeSingle() : null,
-        subject
-          ? supabase.from("subjects").select("id, name").eq("id", subject).maybeSingle()
-          : null,
-      ]);
-      if (c?.data) out[c.data.id] = c.data.name;
-      if (p?.data) out[p.data.id] = p.data.name;
-      if (cl?.data) out[cl.data.id] = cl.data.name;
-      if (s?.data) out[s.data.id] = s.data.name;
-      return out;
-    },
-  });
-
-  const crumbs = [
-    { key: "curso", id: course, label: "Curso" },
-    { key: "polo", id: polo, label: "Polo" },
-    { key: "turma", id: klass, label: "Turma" },
-    { key: "disc", id: subject, label: "Disciplina" },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-      <Link href="/notas" className="hover:text-foreground">
-        Início
-      </Link>
-      {crumbs.map((c) =>
-        c.id ? (
-          <span key={c.key} className="flex items-center gap-1">
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-foreground">{names[c.id] ?? c.label}</span>
-          </span>
-        ) : null
-      )}
-    </div>
-  );
-}
-
+{/* COMPONENTE GENÉRICO DE SELEÇÃO REFINADO */}
 function PickList({
   title,
+  subtitle,
+  stepNumber,
+  icon: Icon,
   items,
   onSelect,
   onBack,
@@ -201,6 +140,9 @@ function PickList({
   isLoading,
 }: {
   title: string;
+  subtitle?: string;
+  stepNumber?: number;
+  icon?: React.ElementType;
   items: { id: string; name: string; hint?: string }[];
   onSelect: (id: string) => void;
   onBack?: () => void;
@@ -208,30 +150,72 @@ function PickList({
   isLoading: boolean;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          {onBack && (
-            <Button size="sm" variant="ghost" onClick={onBack}>
-              <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
-            </Button>
+    <Card className="border-border/50 bg-card/60 shadow-xs">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border/40 pb-4">
+        <div className="flex items-center gap-3">
+          {Icon && (
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              <Icon className="h-4 w-4" />
+            </div>
           )}
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-semibold text-foreground">{title}</CardTitle>
+              {stepNumber && (
+                <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground">
+                  Passo {stepNumber} de 4
+                </Badge>
+              )}
+            </div>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          </div>
         </div>
+
+        {onBack && (
+          <Button size="sm" variant="ghost" onClick={onBack} className="h-8 text-xs text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
+          </Button>
+        )}
+      </CardHeader>
+
+      <CardContent className="p-5">
         {isLoading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Carregando...</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            ))}
+          </div>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p>
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 mb-3">
+              <Inbox className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-medium text-foreground">{empty}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Verifique os cadastros no menu correspondente.
+            </p>
+          </div>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((it) => (
               <button
                 key={it.id}
                 onClick={() => onSelect(it.id)}
-                className="rounded-md border bg-card px-4 py-3 text-left transition hover:border-primary/50 hover:bg-muted/40"
+                className="group relative flex items-center justify-between rounded-xl border border-border/60 bg-background/50 p-4 text-left shadow-2xs transition-all duration-200 hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm"
               >
-                <div className="text-sm font-medium">{it.name}</div>
-                {it.hint && <div className="text-xs text-muted-foreground">{it.hint}</div>}
+                <div className="flex flex-col gap-1 min-w-0 pr-2">
+                  <span className="text-sm font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors truncate">
+                    {it.name}
+                  </span>
+                  {it.hint && (
+                    <div>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal bg-muted text-muted-foreground border-border/40">
+                        {it.hint}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary shrink-0" />
               </button>
             ))}
           </div>
@@ -241,6 +225,7 @@ function PickList({
   );
 }
 
+{/* ETAPAS COM ÍCONES E MENSAGENS PERSONALIZADAS */}
 function StepCourses({ onSelect }: { onSelect: (id: string) => void }) {
   const tenant = useTenant();
   const { data = [], isLoading } = useQuery({
@@ -256,13 +241,17 @@ function StepCourses({ onSelect }: { onSelect: (id: string) => void }) {
     },
     enabled: !!tenant.active?.institutionId,
   });
+
   return (
     <PickList
       title="Selecione o curso"
+      subtitle="Escolha qual curso você deseja acessar"
+      stepNumber={1}
+      icon={BookOpen}
       items={data}
       isLoading={isLoading}
       onSelect={onSelect}
-      empty="Nenhum curso disponível."
+      empty="Nenhum curso cadastrado nesta instituição."
     />
   );
 }
@@ -287,14 +276,18 @@ function StepPolos({
       return (data ?? []).map((r) => r.polos as unknown as { id: string; name: string });
     },
   });
+
   return (
     <PickList
       title="Selecione o polo"
+      subtitle="Escolha o polo onde a turma está vinculada"
+      stepNumber={2}
+      icon={MapPin}
       items={data}
       isLoading={isLoading}
       onSelect={onSelect}
       onBack={onBack}
-      empty="Este curso não está vinculado a nenhum polo."
+      empty="Este curso não está vinculado a nenhum polo no momento."
     />
   );
 }
@@ -323,14 +316,18 @@ function StepClasses({
       return (data ?? []).map((c) => ({ id: c.id, name: c.name, hint: c.period ?? undefined }));
     },
   });
+
   return (
     <PickList
       title="Selecione a turma"
+      subtitle="Filtre pela turma em que deseja lançar notas"
+      stepNumber={3}
+      icon={Layers}
       items={data}
       isLoading={isLoading}
       onSelect={onSelect}
       onBack={onBack}
-      empty="Nenhuma turma cadastrada para este curso/polo."
+      empty="Nenhuma turma cadastrada para esta combinação de curso e polo."
     />
   );
 }
@@ -360,291 +357,18 @@ function StepSubjects({
       }));
     },
   });
+
   return (
     <PickList
       title="Selecione a disciplina"
+      subtitle="Escolha a disciplina para abrir a planilha de notas"
+      stepNumber={4}
+      icon={ClipboardList}
       items={data}
       isLoading={isLoading}
       onSelect={onSelect}
       onBack={onBack}
-      empty="Nenhuma disciplina cadastrada para este curso."
+      empty="Nenhuma disciplina encontrada para este curso."
     />
   );
-}
-
-type Field = {
-  id: string;
-  label: string;
-  kind: "score" | "average" | "status";
-  weight: number;
-  max_value: number;
-  order_index: number;
-};
-type Student = { id: string; name: string; registration: string | null };
-type Grade = {
-  student_id: string;
-  template_field_id: string;
-  value: number | null;
-  status_value: string | null;
-};
-
-function StepGrades({
-  classId,
-  subjectId,
-  institutionId,
-  onBack,
-}: {
-  classId: string;
-  subjectId: string;
-  institutionId: string;
-  onBack: () => void;
-}) {
-  const qc = useQueryClient();
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["notas-grid", classId, subjectId, institutionId],
-    queryFn: async () => {
-      const [tpl, students, grades] = await Promise.all([
-        supabase
-          .from("grade_templates")
-          .select("id, grade_template_fields(id, label, kind, weight, max_value, order_index)")
-          .eq("institution_id", institutionId)
-          .eq("is_default", true)
-          .maybeSingle(),
-        supabase.from("students").select("id, name, registration").eq("class_id", classId).order("name"),
-        supabase
-          .from("grades")
-          .select("student_id, template_field_id, value, status_value")
-          .eq("class_id", classId)
-          .eq("subject_id", subjectId),
-      ]);
-      if (tpl.error) throw tpl.error;
-      if (students.error) throw students.error;
-      if (grades.error) throw grades.error;
-      const fields = ((tpl.data?.grade_template_fields ?? []) as Field[])
-        .slice()
-        .sort((a, b) => a.order_index - b.order_index);
-      return {
-        fields,
-        students: (students.data ?? []) as Student[],
-        grades: (grades.data ?? []) as Grade[],
-      };
-    },
-  });
-
-  const gradeMap = useMemo(() => {
-    const m = new Map<string, Grade>();
-    (data?.grades ?? []).forEach((g) => m.set(`${g.student_id}:${g.template_field_id}`, g));
-    return m;
-  }, [data?.grades]);
-
-  const upsert = useMutation({
-    mutationFn: async (v: { studentId: string; field: Field; value: string }) => {
-      const payload = {
-        institution_id: institutionId,
-        class_id: classId,
-        subject_id: subjectId,
-        student_id: v.studentId,
-        template_field_id: v.field.id,
-        value: v.field.kind === "status" ? null : v.value === "" ? null : Number(v.value),
-        status_value: v.field.kind === "status" ? v.value || null : null,
-      };
-      const { error } = await supabase
-        .from("grades")
-        .upsert(payload, { onConflict: "student_id,subject_id,class_id,template_field_id" });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notas-grid", classId, subjectId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
-  if (!data) return null;
-  const { fields, students } = data;
-
-  if (!fields.length) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm">
-          Não há template padrão de notas nesta instituição.{" "}
-          <Link href="/templates-notas" className="text-primary underline">
-            Configurar templates
-          </Link>
-          .
-        </CardContent>
-      </Card>
-    );
-  }
-  if (!students.length) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm">
-          Esta turma não tem alunos cadastrados.{" "}
-          <Link href="/alunos" className="text-primary underline">
-            Cadastrar alunos
-          </Link>
-          .
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">Lançamento de notas</h3>
-            <Badge variant="secondary" className="gap-1">
-              <Save className="h-3 w-3" /> Salvamento automático
-            </Badge>
-          </div>
-          <Button size="sm" variant="ghost" onClick={onBack}>
-            <ArrowLeft className="mr-1 h-4 w-4" /> Trocar disciplina
-          </Button>
-        </div>
-
-        {/* Mobile View: Accordion */}
-        <div className="md:hidden">
-          <Accordion type="multiple" className="w-full">
-            {students.map((s) => {
-              const computedAverage = computeAverage(fields, s.id, gradeMap);
-              return (
-                <AccordionItem value={s.id} key={s.id}>
-                  <AccordionTrigger>
-                    <div className="text-left">
-                      <div className="font-medium">{s.name}</div>
-                      {s.registration && (
-                        <div className="text-xs text-muted-foreground">{s.registration}</div>
-                      )}
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3 pt-2">
-                      {fields.map((f) => {
-                        const g = gradeMap.get(`${s.id}:${f.id}`);
-                        const displayVal = f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
-                        if (f.kind === "average") {
-                          return (
-                            <div key={f.id} className="flex items-center justify-between rounded-md bg-muted p-3">
-                              <Label>{f.label}</Label>
-                              <span className="text-sm font-medium">
-                                {computedAverage != null ? computedAverage.toFixed(2) : "—"}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={f.id}>
-                            <Label className="text-xs font-medium text-muted-foreground">{f.label}</Label>
-                            <Input
-                              defaultValue={displayVal}
-                              key={`${s.id}:${f.id}:${displayVal}`}
-                              onBlur={(e) => {
-                                const newVal = e.target.value.trim();
-                                if (newVal === displayVal) return;
-                                upsert.mutate({ studentId: s.id, field: f, value: newVal });
-                              }}
-                              className="h-9 mt-1"
-                              placeholder={f.kind === "status" ? "Ex.: Aprovado" : "—"}
-                              inputMode={f.kind === "status" ? "text" : "decimal"}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              );
-            })}
-          </Accordion>
-        </div>
-
-        {/* Desktop View: Table */}
-        <div className="hidden overflow-x-auto md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[220px]">Aluno</TableHead>
-                {fields.map((f) => (
-                  <TableHead key={f.id} className="text-center">
-                    <div className="text-xs font-semibold">{f.label}</div>
-                    <div className="text-[10px] font-normal text-muted-foreground">
-                      {f.kind === "status"
-                        ? "situação"
-                        : `máx ${f.max_value}${f.kind === "score" ? ` · peso ${f.weight}` : ""}`}
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((s) => {
-                const computedAverage = computeAverage(fields, s.id, gradeMap);
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <div className="font-medium">{s.name}</div>
-                      {s.registration && (
-                        <div className="text-xs text-muted-foreground">{s.registration}</div>
-                      )}
-                    </TableCell>
-                    {fields.map((f) => {
-                      const g = gradeMap.get(`${s.id}:${f.id}`);
-                      const displayVal =
-                        f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
-                      if (f.kind === "average") {
-                        return (
-                          <TableCell key={f.id} className="text-center">
-                            <span className="inline-block rounded-md bg-muted px-2 py-1 text-sm font-medium">
-                              {computedAverage != null ? computedAverage.toFixed(2) : "—"}
-                            </span>
-                          </TableCell>
-                        );
-                      }
-                      return (
-                        <TableCell key={f.id} className="text-center">
-                          <Input
-                            defaultValue={displayVal}
-                            key={`${s.id}:${f.id}:${displayVal}`}
-                            onBlur={(e) => {
-                              const newVal = e.target.value.trim();
-                              if (newVal === displayVal) return;
-                              upsert.mutate({ studentId: s.id, field: f, value: newVal });
-                            }}
-                            className="h-8 w-24 text-center mx-auto"
-                            placeholder={f.kind === "status" ? "Ex.: Aprovado" : "—"}
-                            inputMode={f.kind === "status" ? "text" : "decimal"}
-                          />
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function computeAverage(fields: Field[], studentId: string, gradeMap: Map<string, Grade>) {
-  const scores = fields.filter((f) => f.kind === "score" && f.weight > 0);
-  if (!scores.length) return null;
-  let num = 0,
-    den = 0,
-    any = false;
-  for (const f of scores) {
-    const g = gradeMap.get(`${studentId}:${f.id}`);
-    if (g?.value != null) {
-      num += Number(g.value) * f.weight;
-      den += f.weight;
-      any = true;
-    }
-  }
-  return any && den > 0 ? num / den : null;
 }

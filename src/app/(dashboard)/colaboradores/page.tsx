@@ -27,13 +27,24 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { History, Pencil, Trash2 } from "lucide-react";
+import {
+  History,
+  Pencil,
+  Trash2,
+  Users,
+  Search,
+  Loader2,
+  ShieldAlert,
+  Building2,
+  Calendar,
+} from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -48,6 +59,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { updateMembershipAction, removeMembershipAction } from "./actions";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type Row = {
   membershipId: string;
@@ -64,6 +79,7 @@ export default function ColaboradoresPage() {
   const tenant = useTenant();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Row | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const canAdmin = tenant.active ? isAdminLike(tenant.active.role) : false;
 
@@ -105,7 +121,7 @@ export default function ColaboradoresPage() {
     mutationFn: updateMembershipAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberships-list"] });
-      toast.success("Colaborador atualizado");
+      toast.success("Colaborador atualizado com sucesso");
       setEditing(null);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -117,96 +133,165 @@ export default function ColaboradoresPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberships-list"] });
-      toast.success("Colaborador removido");
+      toast.success("Colaborador removido com sucesso");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   if (!tenant.active) {
-    return <div className="p-6"><p>Carregando...</p></div>;
+    return <ColaboradoresSkeleton />;
   }
+
+  const filteredData = data.filter((m) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
+  });
+
+  const getRoleBadgeVariant = (role: AppRole) => {
+    switch (role) {
+      case "owner":
+        return "default";
+      case "admin":
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "Nunca acessou";
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   return (
     <>
       <PageHeader
         title="Colaboradores"
-        description="Pessoas com acesso à instituição."
+        description="Gerencie os usuários e seus respectivos níveis de permissão dentro da instituição."
         actions={
           canAdmin && (
-            <Button variant="outline" asChild>
+            <Button variant="outline" size="sm" asChild className="text-xs shadow-2xs">
               <Link href="/colaboradores/historico">
-                <History className="mr-2 h-4 w-4" />
-                Histórico
+                <History className="mr-1.5 h-3.5 w-3.5" />
+                Histórico de Alterações
               </Link>
             </Button>
           )
         }
       />
       <PageBody>
-        <div>
-          {/* Mobile View: Cards */}
-          <div className="md:hidden">
-            {isLoading ? (
-              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
-            ) : data.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">Nenhum colaborador encontrado.</div>
-            ) : (
-              <div className="space-y-4">
-                {data.map((m) => (
-                  <div key={m.membershipId} className="rounded-lg border bg-card p-4">
-                    <div className="flex items-start justify-between">
+        <Card className="border-border/60 bg-card/60 shadow-2xs">
+          <CardHeader className="pb-3 border-b border-border/40">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm font-semibold">
+                  Membros da Equipe ({data.length})
+                </CardTitle>
+              </div>
+
+              {/* Busca rápida */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou e-mail..."
+                  className="pl-8 h-8 text-xs bg-background/50"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {/* Visão Mobile: Lista de Cards */}
+            <div className="block md:hidden divide-y divide-border/40">
+              {isLoading ? (
+                <div className="p-4 space-y-3">
+                  <Skeleton className="h-20 w-full rounded-lg" />
+                  <Skeleton className="h-20 w-full rounded-lg" />
+                </div>
+              ) : filteredData.length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  Nenhum colaborador encontrado.
+                </div>
+              ) : (
+                filteredData.map((m) => (
+                  <div key={m.membershipId} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          {m.avatar && <AvatarImage src={m.avatar} />}
-                          <AvatarFallback>{m.name?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                        <Avatar className="h-9 w-9 border border-border/60">
+                          {m.avatar && <AvatarImage src={m.avatar} alt={m.name} />}
+                          <AvatarFallback className="text-xs font-semibold">
+                            {m.name?.[0]?.toUpperCase() ?? "?"}
+                          </AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-semibold">{m.name}</div>
-                          <div className="text-sm text-muted-foreground">{m.email}</div>
+                          <p className="text-sm font-medium leading-none text-foreground">
+                            {m.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">{m.email}</p>
                         </div>
                       </div>
-                      <Badge variant={m.role === "owner" ? "default" : "secondary"}>
+                      <Badge variant={getRoleBadgeVariant(m.role)} className="text-[10px] capitalize">
                         {ROLE_LABELS[m.role]}
                       </Badge>
                     </div>
 
-                    {m.polos.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-sm font-medium">Polos:</div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {m.polos.map((p) => (
-                            <Badge key={p.id} variant="outline">{p.name}</Badge>
-                          ))}
-                        </div>
+                    {/* Informações adicionais */}
+                    <div className="flex flex-col gap-1.5 text-xs text-muted-foreground pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3 w-3" />
+                        <span>Acesso: {formatDate(m.lastSignIn)}</span>
                       </div>
-                    )}
 
+                      {m.polos.length > 0 && (
+                        <div className="flex items-start gap-1.5 mt-1">
+                          <Building2 className="h-3 w-3 mt-0.5 shrink-0" />
+                          <div className="flex flex-wrap gap-1">
+                            {m.polos.map((p) => (
+                              <Badge key={p.id} variant="outline" className="text-[10px] py-0 px-1.5">
+                                {p.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Ações */}
                     {canAdmin && m.role !== "owner" && (
-                      <div className="mt-4 flex justify-end gap-2">
+                      <div className="pt-2 flex justify-end gap-2 border-t border-border/30">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setEditing(m)}
+                          className="h-7 text-xs"
                         >
-                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                          <Pencil className="mr-1.5 h-3 w-3" /> Editar
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Remover
+                            <Button size="sm" variant="destructive" className="h-7 text-xs">
+                              <Trash2 className="mr-1.5 h-3 w-3" /> Remover
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Tem certeza que deseja remover o acesso de {m.name} a esta instituição?
+                                Tem certeza que deseja remover o acesso de <strong>{m.name}</strong> a esta instituição?
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
-                                Remover
+                                Confirmar Remoção
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -214,108 +299,128 @@ export default function ColaboradoresPage() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </div>
 
-          {/* Desktop View: Table */}
-          <div className="hidden rounded-lg border bg-card md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Perfil</TableHead>
-                  <TableHead>Polos</TableHead>
-                  {canAdmin && <TableHead className="w-24 text-right"></TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </TableCell>
+            {/* Visão Desktop: Tabela */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-b border-border/50">
+                    <TableHead className="text-xs">Colaborador</TableHead>
+                    <TableHead className="text-xs">Perfil / Função</TableHead>
+                    <TableHead className="text-xs">Polos Vinculados</TableHead>
+                    <TableHead className="text-xs">Último Acesso</TableHead>
+                    {canAdmin && <TableHead className="w-20 text-right text-xs">Ações</TableHead>}
                   </TableRow>
-                ) : (
-                  data.map((m) => (
-                    <TableRow key={m.membershipId}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            {m.avatar && <AvatarImage src={m.avatar} />}
-                            <AvatarFallback>{m.name?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">{m.name}</span>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-primary" />
+                        Carregando colaboradores...
                       </TableCell>
-                      <TableCell>{m.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={m.role === "owner" ? "default" : "secondary"}>
-                          {ROLE_LABELS[m.role]}
-                        </Badge>
+                    </TableRow>
+                  ) : filteredData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-10 text-center text-xs text-muted-foreground">
+                        Nenhum colaborador encontrado para a busca especificada.
                       </TableCell>
-                      <TableCell>
-                        {m.polos.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {m.polos.map((p) => (
-                              <Badge key={p.id} variant="outline">
-                                {p.name}
-                              </Badge>
-                            ))}
+                    </TableRow>
+                  ) : (
+                    filteredData.map((m) => (
+                      <TableRow key={m.membershipId} className="hover:bg-muted/30 transition-colors">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border border-border/60">
+                              {m.avatar && <AvatarImage src={m.avatar} alt={m.name} />}
+                              <AvatarFallback className="text-xs font-semibold">
+                                {m.name?.[0]?.toUpperCase() ?? "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-medium text-foreground">{m.name}</span>
+                              <span className="text-[11px] text-muted-foreground">{m.email}</span>
+                            </div>
                           </div>
-                        )}
-                      </TableCell>
-                      {canAdmin && (
-                        <TableCell className="text-right">
-                          {m.role !== "owner" && (
-                            <>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                title="Editar"
-                                onClick={() => setEditing(m)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="icon" variant="ghost" title="Remover">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Tem certeza que deseja remover o acesso de {m.name} a esta
-                                      instituição?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
-                                      Remover
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getRoleBadgeVariant(m.role)} className="text-[11px] font-normal">
+                            {ROLE_LABELS[m.role]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {m.polos.length === 0 ? (
+                            <span className="text-xs text-muted-foreground/60">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {m.polos.map((p) => (
+                                <Badge key={p.id} variant="outline" className="text-[10px] py-0">
+                                  {p.name}
+                                </Badge>
+                              ))}
+                            </div>
                           )}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(m.lastSignIn)}
+                        </TableCell>
+                        {canAdmin && (
+                          <TableCell className="text-right">
+                            {m.role !== "owner" && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  title="Editar permissões"
+                                  onClick={() => setEditing(m)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      title="Remover colaborador"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmar remoção</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja remover o acesso de <strong>{m.name}</strong> a esta instituição?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => remove.mutate(m.membershipId)}>
+                                        Remover
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </PageBody>
 
+      {/* Modal de Edição */}
       {editing && (
         <EditMembershipDialog
           key={editing.membershipId}
@@ -330,6 +435,7 @@ export default function ColaboradoresPage() {
   );
 }
 
+// Modal Refatorado para Edição de Membro
 function EditMembershipDialog({
   row,
   institutionId,
@@ -346,7 +452,7 @@ function EditMembershipDialog({
   const [role, setRole] = useState<AppRole>(row.role);
   const [selected, setSelected] = useState<string[]>(row.polos.map((p) => p.id));
 
-  const { data: polos = [] } = useQuery({
+  const { data: polos = [], isLoading: polosLoading } = useQuery({
     queryKey: ["polos-all", institutionId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -363,55 +469,78 @@ function EditMembershipDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Editar colaborador — {row.name}</DialogTitle>
+          <DialogTitle className="text-base font-semibold">Editar Perfil do Colaborador</DialogTitle>
+          <DialogDescription className="text-xs">
+            Altere as permissões de acesso e o perfil de <strong>{row.name}</strong>.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Perfil</Label>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Perfil de Acesso</Label>
             <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
-              <SelectTrigger className="mt-1">
+              <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Administrador</SelectItem>
-                <SelectItem value="coord_geral">Coordenador Geral</SelectItem>
-                <SelectItem value="coord_polo">Coordenador de Polo</SelectItem>
+                <SelectItem value="admin" className="text-xs">Administrador</SelectItem>
+                <SelectItem value="coord_geral" className="text-xs">Coordenador Geral</SelectItem>
+                <SelectItem value="coord_polo" className="text-xs">Coordenador de Polo</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
           {showPolos && (
-            <div>
-              <Label>Polos vinculados</Label>
-              <div className="mt-2 max-h-64 space-y-2 overflow-auto rounded-md border p-3">
-                {polos.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum polo cadastrado ainda.</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Polos Vinculados</Label>
+                <span className="text-[10px] text-muted-foreground">
+                  {selected.length} selecionado(s)
+                </span>
+              </div>
+              
+              <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border border-border/60 bg-background/50 p-3">
+                {polosLoading ? (
+                  <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Carregando polos...
+                  </div>
+                ) : polos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-3">
+                    Nenhum polo cadastrado na instituição.
+                  </p>
                 ) : (
                   polos.map((p) => (
-                    <label key={p.id} className="flex items-center gap-2 text-sm">
+                    <label key={p.id} className="flex items-center gap-2 text-xs font-normal cursor-pointer select-none">
                       <Checkbox
                         checked={selected.includes(p.id)}
                         onCheckedChange={(v) =>
                           setSelected((cur) => (v ? [...cur, p.id] : cur.filter((x) => x !== p.id)))
                         }
                       />
-                      {p.name}
+                      <span className="text-foreground">{p.name}</span>
                     </label>
                   ))
                 )}
               </div>
-              {showPolos && selected.length === 0 && (
-                <p className="mt-1 text-xs text-destructive">Selecione ao menos um polo.</p>
+
+              {selected.length === 0 && (
+                <p className="text-[11px] text-destructive flex items-center gap-1">
+                  <ShieldAlert className="h-3 w-3" />
+                  Coordenadores de Polo precisam ter ao menos um polo selecionado.
+                </p>
               )}
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
             Cancelar
           </Button>
           <Button
+            size="sm"
             disabled={isSaving || (showPolos && selected.length === 0)}
             onClick={() =>
               onSave({
@@ -420,11 +549,26 @@ function EditMembershipDialog({
                 polo_ids: showPolos ? selected : [],
               })
             }
+            className="text-xs"
           >
-            {isSaving ? "Salvando..." : "Salvar"}
+            {isSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {isSaving ? "Salvando..." : "Salvar Alterações"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Skeleton para carregamento inicial
+function ColaboradoresSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-80" />
+      </div>
+      <Skeleton className="h-96 w-full rounded-xl" />
+    </div>
   );
 }

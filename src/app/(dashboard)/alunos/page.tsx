@@ -2,7 +2,18 @@
 
 import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Loader2, RotateCcw, Search, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Filter,
+  Loader2,
+  RotateCcw,
+  Users,
+  GraduationCap,
+  Building2,
+  BookOpen,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -19,6 +30,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlunosList } from "./alunos-list";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 // Hook para gerenciar os parâmetros da URL
 function useAlunosSearchParams() {
@@ -127,134 +141,196 @@ function AlunosPageContent() {
   };
 
   const STEPS = [
-    { id: "curso", label: "Curso", completed: !!cursoId },
-    { id: "polo", label: "Polo", completed: !!poloId },
-    { id: "turma", label: "Turma", completed: !!turmaId },
-    { id: "alunos", label: "Alunos", completed: false },
+    { id: "curso", label: "Curso", completed: !!cursoId, icon: GraduationCap },
+    { id: "polo", label: "Polo", completed: !!poloId, icon: Building2 },
+    { id: "turma", label: "Turma", completed: !!turmaId, icon: BookOpen },
+    { id: "alunos", label: "Listagem de Alunos", completed: false, icon: Users },
   ];
 
   const currentStepIndex = STEPS.findIndex((s) => !s.completed);
 
   const selects = [
     {
+      id: "curso",
       label: "1. Curso",
       value: cursoId,
       onValueChange: (v: string) => handleParamChange("cursoId", v),
       options: cursos,
-      placeholder: "Selecione o curso",
+      placeholder: "Selecione um curso",
       disabled: cursosLoading,
       loading: cursosLoading,
     },
     {
+      id: "polo",
       label: "2. Polo",
       value: poloId,
       onValueChange: (v: string) => handleParamChange("poloId", v),
       options: polos,
-      placeholder: cursoId ? "Selecione o polo" : "Escolha um curso primeiro",
+      placeholder: cursoId ? "Selecione um polo" : "Escolha um curso primeiro",
       disabled: !cursoId || polosLoading,
       loading: polosLoading,
     },
     {
+      id: "turma",
       label: "3. Turma",
       value: turmaId,
       onValueChange: (v: string) => handleParamChange("turmaId", v),
       options: turmas,
-      placeholder: poloId ? "Selecione a turma" : "Escolha um polo primeiro",
+      placeholder: poloId ? "Selecione uma turma" : "Escolha um polo primeiro",
       disabled: !poloId || turmasLoading,
       loading: turmasLoading,
     },
   ];
 
+  const isFiltered = !!(cursoId || poloId || turmaId);
+
   return (
     <>
       <PageHeader
         title="Alunos"
-        description="Selecione o contexto (curso → polo → turma) para carregar os alunos."
+        description="Consulte e gerencie as matrículas selecionando o contexto educacional."
         actions={
-          (cursoId || poloId || turmaId) && (
-            <Button variant="outline" size="sm" onClick={() => router.replace(pathname)}>
-              <RotateCcw className="mr-1 h-4 w-4" /> Recomeçar
+          isFiltered && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.replace(pathname)}
+              className="text-xs shadow-2xs"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Limpar Seleção
             </Button>
           )
         }
       />
       <PageBody>
-        {/* Stepper */}
-        <ol className="mb-4 flex flex-wrap items-center gap-2 text-xs">
-          {STEPS.map((step, index) => (
-            <li key={step.id} className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "grid h-6 w-6 place-items-center rounded-full border",
-                  step.completed || currentStepIndex === index
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-muted text-muted-foreground"
+        <div className="space-y-6">
+          {/* Card do Filtro e Stepper */}
+          <Card className="border-border/60 bg-card/60 shadow-2xs">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-sm font-semibold">Seleção de Contexto</CardTitle>
+                </div>
+                {isFiltered && (
+                  <Badge variant="secondary" className="text-[10px] font-medium">
+                    Filtro Ativo
+                  </Badge>
                 )}
-              >
-                {index + 1}
-              </span>
-              <span
-                className={cn(
-                  step.completed || currentStepIndex === index
-                    ? "font-medium"
-                    : "text-muted-foreground"
-                )}
-              >
-                {step.label}
-              </span>
-              {index < STEPS.length - 1 && (
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              )}
-            </li>
-          ))}
-        </ol>
+              </div>
 
-        {/* Selects */}
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          {selects.map((s) => (
-            <div key={s.label} className="space-y-1.5">
-              <Label>{s.label}</Label>
-              <Select value={s.value ?? ""} onValueChange={s.onValueChange} disabled={s.disabled}>
-                <SelectTrigger>
-                  {s.loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <SelectValue placeholder={s.placeholder} />
-                </SelectTrigger>
-                <SelectContent>
-                  {s.options.map((opt: any) => (
-                    <SelectItem key={opt.id} value={opt.id}>
-                      {opt.name ?? opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Stepper Visual */}
+              <ol className="pt-3 flex flex-wrap items-center gap-2 text-xs">
+                {STEPS.map((step, index) => {
+                  const StepIcon = step.icon;
+                  const isActive = currentStepIndex === index;
+                  const isDone = step.completed;
+
+                  return (
+                    <li key={step.id} className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors",
+                          isDone && "bg-primary/10 text-primary font-medium",
+                          isActive && "bg-primary text-primary-foreground font-medium shadow-2xs",
+                          !isDone && !isActive && "bg-muted/50 text-muted-foreground"
+                        )}
+                      >
+                        {isDone ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <StepIcon className="h-3.5 w-3.5" />
+                        )}
+                        <span>{step.label}</span>
+                      </div>
+                      {index < STEPS.length - 1 && (
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </CardHeader>
+
+            <CardContent className="pt-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                {selects.map((s) => (
+                  <div key={s.id} className="space-y-1.5">
+                    <Label className="text-xs font-medium text-foreground">{s.label}</Label>
+                    <Select
+                      value={s.value ?? ""}
+                      onValueChange={s.onValueChange}
+                      disabled={s.disabled}
+                    >
+                      <SelectTrigger className="w-full bg-background/50 h-9 text-xs">
+                        {s.loading ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Carregando...</span>
+                          </div>
+                        ) : (
+                          <SelectValue placeholder={s.placeholder} />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {s.options.map((opt: any) => (
+                          <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                            {opt.name ?? opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Conteúdo Dinâmico */}
+          {turmaId ? (
+            <div className="space-y-4">
+              <AlunosList turmaId={turmaId} canEdit={canEdit} />
             </div>
-          ))}
+          ) : (
+            <Card className="border-dashed border-border/80 bg-card/40">
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/60 text-muted-foreground mb-4">
+                  <Users className="h-6 w-6" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">
+                  Selecione o Contexto para Visualizar os Alunos
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground max-w-md leading-relaxed">
+                  Para otimizar o desempenho, escolha sequencialmente o <strong>Curso</strong>, o{" "}
+                  <strong>Polo</strong> e a <strong>Turma</strong> desejada acima para carregar a lista de estudantes.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
-
-        {/* Content */}
-        {turmaId ? (
-          <div className="mt-6">
-            <AlunosList turmaId={turmaId} canEdit={canEdit} />
-          </div>
-        ) : (
-          <div className="mt-6 rounded-xl border-2 border-dashed p-10 text-center">
-            <Search className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-semibold">Complete as etapas para carregar os alunos</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Nada é consultado no banco até você concluir todas as seleções — isso mantém a página
-              rápida.
-            </p>
-          </div>
-        )}
       </PageBody>
     </>
   );
 }
 
-// O Next.js recomenda envolver páginas que usam `useSearchParams` em `<Suspense>`.
+// Fallback visual durante o carregamento de parâmetros na URL
+function AlunosPageSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-96" />
+      </div>
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-64 w-full rounded-xl" />
+    </div>
+  );
+}
+
+// Encapsulamento com Suspense como boa prática do Next.js
 export default function AlunosPageWrapper() {
   return (
-    <Suspense fallback={<div className="p-6">Carregando...</div>}>
+    <Suspense fallback={<AlunosPageSkeleton />}>
       <AlunosPageContent />
     </Suspense>
   );

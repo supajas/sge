@@ -61,6 +61,20 @@ async function fetchInvites(institutionId: string) {
   return data;
 }
 
+function getInviteLink(code: string) {
+  return `${window.location.origin}/invite/${code}`;
+}
+
+function copyInviteLink(code: string) {
+  navigator.clipboard.writeText(getInviteLink(code));
+  toast.success("Link copiado");
+}
+
+function shareWhatsApp(code: string, institutionName?: string) {
+  const msg = `Você foi convidado para ${institutionName ?? "a plataforma"}. Aceite: ${getInviteLink(code)}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
 export default function ConvitesPage() {
   const tenant = useTenant();
   const qc = useQueryClient();
@@ -136,10 +150,6 @@ export default function ConvitesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function link(code: string) {
-    return `${window.location.origin}/invite/${code}`;
-  }
-
   if (!tenant.active) {
     return <div className="p-6"><p>Carregando...</p></div>;
   }
@@ -195,17 +205,12 @@ export default function ConvitesPage() {
                   const expired = new Date(i.expires_at).getTime() < Date.now();
                   const used = !!i.used_at;
                   const active = !expired && !used;
+
                   return (
                     <div key={i.id} className="rounded-lg border bg-card p-4">
                       <div className="flex items-start justify-between">
                         <div className="font-mono text-sm">{i.code}</div>
-                        {used ? (
-                          <Badge>Usado</Badge>
-                        ) : expired ? (
-                          <Badge variant="outline">Expirado</Badge>
-                        ) : (
-                          <Badge variant="secondary">Ativo</Badge>
-                        )}
+                        <InviteStatusBadge used={used} expired={expired} />
                       </div>
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                         <p><span className="font-medium text-foreground">Email:</span> {i.email ?? "Qualquer um"}</p>
@@ -213,52 +218,14 @@ export default function ConvitesPage() {
                         <p><span className="font-medium text-foreground">Expira:</span> {new Date(i.expires_at).toLocaleDateString("pt-BR")}</p>
                       </div>
                       <div className="mt-4 flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            navigator.clipboard.writeText(link(i.code));
-                            toast.success("Link copiado");
-                          }}
-                        >
-                          <Copy className="mr-2 h-4 w-4" /> Copiar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            const msg = `Você foi convidado para ${tenant.active?.name}. Aceite: ${link(i.code)}`;
-                            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-                          }}
-                        >
-                          <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
-                        </Button>
-                        {active && (
-                          <Button size="sm" variant="outline" onClick={() => setEditingInvite(i)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                          </Button>
-                        )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir o convite de código "{i.code}"?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => del.mutate(i.id)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <InviteActions
+                          invite={i}
+                          active={active}
+                          tenantName={tenant.active?.name}
+                          onEdit={() => setEditingInvite(i)}
+                          onDelete={() => del.mutate(i.id)}
+                          iconOnly={false}
+                        />
                       </div>
                     </div>
                   );
@@ -298,6 +265,7 @@ export default function ConvitesPage() {
                     const expired = new Date(i.expires_at).getTime() < Date.now();
                     const used = !!i.used_at;
                     const active = !expired && !used;
+
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="font-mono text-xs">{i.code}</TableCell>
@@ -311,65 +279,17 @@ export default function ConvitesPage() {
                           {new Date(i.expires_at).toLocaleDateString("pt-BR")}
                         </TableCell>
                         <TableCell>
-                          {used ? (
-                            <Badge>Usado</Badge>
-                          ) : expired ? (
-                            <Badge variant="outline">Expirado</Badge>
-                          ) : (
-                            <Badge variant="secondary">Ativo</Badge>
-                          )}
+                          <InviteStatusBadge used={used} expired={expired} />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="Copiar link"
-                            onClick={() => {
-                              navigator.clipboard.writeText(link(i.code));
-                              toast.success("Link copiado");
-                            }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            title="WhatsApp"
-                            onClick={() => {
-                              const msg = `Você foi convidado para ${tenant.active?.name}. Aceite: ${link(
-                                i.code
-                              )}`;
-                              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-                            }}
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                          {active && (
-                            <Button size="icon" variant="ghost" title="Editar" onClick={() => setEditingInvite(i)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" title="Excluir">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir o convite de código "{i.code}"?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => del.mutate(i.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <InviteActions
+                            invite={i}
+                            active={active}
+                            tenantName={tenant.active?.name}
+                            onEdit={() => setEditingInvite(i)}
+                            onDelete={() => del.mutate(i.id)}
+                            iconOnly
+                          />
                         </TableCell>
                       </TableRow>
                     );
@@ -380,6 +300,89 @@ export default function ConvitesPage() {
           </div>
         </div>
       </PageBody>
+    </>
+  );
+}
+
+function InviteStatusBadge({ used, expired }: { used: boolean; expired: boolean }) {
+  if (used) return <Badge>Usado</Badge>;
+  if (expired) return <Badge variant="outline">Expirado</Badge>;
+  return <Badge variant="secondary">Ativo</Badge>;
+}
+
+function InviteActions({
+  invite,
+  active,
+  tenantName,
+  onEdit,
+  onDelete,
+  iconOnly = false,
+}: {
+  invite: Invite;
+  active: boolean;
+  tenantName?: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  iconOnly?: boolean;
+}) {
+  return (
+    <>
+      <Button
+        size={iconOnly ? "icon" : "sm"}
+        variant={iconOnly ? "ghost" : "outline"}
+        title="Copiar link"
+        onClick={() => copyInviteLink(invite.code)}
+      >
+        <Copy className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+        {!iconOnly && "Copiar"}
+      </Button>
+
+      <Button
+        size={iconOnly ? "icon" : "sm"}
+        variant={iconOnly ? "ghost" : "outline"}
+        title="WhatsApp"
+        onClick={() => shareWhatsApp(invite.code, tenantName)}
+      >
+        <MessageCircle className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+        {!iconOnly && "WhatsApp"}
+      </Button>
+
+      {active && (
+        <Button
+          size={iconOnly ? "icon" : "sm"}
+          variant={iconOnly ? "ghost" : "outline"}
+          title="Editar"
+          onClick={onEdit}
+        >
+          <Pencil className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+          {!iconOnly && "Editar"}
+        </Button>
+      )}
+
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            size={iconOnly ? "icon" : "sm"}
+            variant={iconOnly ? "ghost" : "destructive"}
+            title="Excluir"
+          >
+            <Trash2 className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+            {!iconOnly && "Excluir"}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o convite de código &quot;{invite.code}&quot;?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={onDelete}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

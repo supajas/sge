@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  BookOpen,
+  Library,
+  Clock,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -19,23 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -45,9 +36,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
-type Subject = { id: string; name: string; workload_hours: number | null; course_id: string };
-type Course = { id: string; name: string };
+import { Course, Subject } from "@/lib/types/subjects";
+import { SubjectFormDialog } from "@/components/subject-form-dialog";
+import { saveSubjectAction, saveSubjectsBulkAction, deleteSubjectAction } from "./actions";
 
 export default function DisciplinasPage() {
   const tenant = useTenant();
@@ -89,18 +84,8 @@ export default function DisciplinasPage() {
     enabled: !!tenant.active?.institutionId,
   });
 
-  const save = useMutation({
-    mutationFn: async (v: { name: string; workload_hours: number | null; course_id: string }) => {
-      if (!tenant.active) throw new Error("No active institution");
-      const payload = { ...v, institution_id: tenant.active.institutionId };
-      if (editing) {
-        const { error } = await supabase.from("subjects").update(payload).eq("id", editing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("subjects").insert(payload);
-        if (error) throw error;
-      }
-    },
+  const saveSingle = useMutation({
+    mutationFn: saveSubjectAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       setFormOpen(false);
@@ -110,11 +95,18 @@ export default function DisciplinasPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("subjects").delete().eq("id", id);
-      if (error) throw error;
+  const saveBulk = useMutation({
+    mutationFn: saveSubjectsBulkAction,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["subjects"] });
+      setFormOpen(false);
+      toast.success(`${res.count} disciplinas importadas com sucesso!`);
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const del = useMutation({
+    mutationFn: deleteSubjectAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       toast.success("Disciplina excluída com sucesso.");
@@ -124,15 +116,25 @@ export default function DisciplinasPage() {
 
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
 
+  const uniqueCoursesCount = useMemo(() => {
+    const courseIds = new Set(data.map((s) => s.course_id));
+    return courseIds.size;
+  }, [data]);
+
   if (!tenant.active) {
-    return <div className="p-6"><p>Carregando...</p></div>;
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48 rounded-md" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+    );
   }
 
   return (
     <>
       <PageHeader
         title="Disciplinas"
-        description="Disciplinas por curso."
+        description="Gestão de matriz curricular e disciplinas por curso."
         actions={
           canEdit && (
             <Dialog
@@ -143,145 +145,185 @@ export default function DisciplinasPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-1 h-4 w-4" /> Nova disciplina
+                <Button size="sm" className="shadow-2xs">
+                  <Plus className="mr-1.5 h-4 w-4" /> Nova Disciplina
                 </Button>
               </DialogTrigger>
-              <SubjectForm
-                key={editing?.id}
+              <SubjectFormDialog
+                key={editing?.id ?? "new"}
                 editing={editing}
                 courses={courses}
-                onSubmit={(v) => save.mutate(v)}
-                pending={save.isPending}
+                onSubmitSingle={(v) => saveSingle.mutate(v)}
+                onSubmitBulk={(items) => saveBulk.mutate(items)}
+                pending={saveSingle.isPending || saveBulk.isPending}
               />
             </Dialog>
           )
         }
       />
       <PageBody>
-        <div>
-          {/* Mobile View: Cards */}
-          <div className="md:hidden">
+        <div className="space-y-6">
+          {/* Métricas Rápidas */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                  <Library className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Total de Disciplinas</p>
+                  <p className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : data.length}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Cursos Atendidos</p>
+                  <p className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : uniqueCoursesCount}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* VISÃO MOBILE: CARDS */}
+          <div className="md:hidden space-y-3">
             {isLoading ? (
-              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 w-full rounded-xl" />
+              ))
             ) : data.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">Nenhuma disciplina cadastrada.</div>
+              <EmptySubjectsState />
             ) : (
-              <div className="space-y-4">
-                {data.map((s) => (
-                  <div key={s.id} className="rounded-lg border bg-card p-4">
-                    <div className="font-semibold">{s.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Curso: {courseMap.get(s.course_id) ?? "—"}
+              data.map((s) => (
+                <Card key={s.id} className="border-border/60 bg-card/80 shadow-2xs">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-semibold text-foreground text-base leading-tight">
+                          {s.name}
+                        </h4>
+                        {s.workload_hours && (
+                          <Badge variant="outline" className="font-mono text-[11px] shrink-0 bg-muted/30">
+                            <Clock className="mr-1 h-3 w-3 text-muted-foreground" />
+                            {s.workload_hours}h
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          {courseMap.get(s.course_id) ?? "Curso não encontrado"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      Carga Horária: {s.workload_hours ?? "—"}h
-                    </div>
+
                     {canEdit && (
-                      <div className="mt-4 flex justify-end gap-2">
+                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border/40 pt-3">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
+                          className="h-8 text-xs hover:bg-accent"
                           onClick={() => {
                             setEditing(s);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir a disciplina "{s.name}"? Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => del.mutate(s.id)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <DeleteSubjectDialog
+                          subjectName={s.name}
+                          onConfirm={() => del.mutate(s.id)}
+                        />
                       </div>
                     )}
-                  </div>
-                ))}
-              </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
           </div>
 
-          {/* Desktop View: Table */}
-          <div className="hidden rounded-lg border bg-card md:block">
+          {/* VISÃO DESKTOP: TABELA */}
+          <div className="hidden rounded-xl border border-border/60 bg-card/60 shadow-2xs overflow-hidden md:block">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Curso</TableHead>
-                  <TableHead>Carga horária</TableHead>
-                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="font-semibold text-foreground">Nome da Disciplina</TableHead>
+                  <TableHead className="font-semibold text-foreground">Curso Vinculado</TableHead>
+                  <TableHead className="font-semibold text-foreground w-36">Carga Horária</TableHead>
+                  {canEdit && <TableHead className="w-28 text-right font-semibold text-foreground">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-56" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      {canEdit && <TableCell><Skeleton className="h-8 w-16 ml-auto" /></TableCell>}
+                    </TableRow>
+                  ))
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                      Nenhuma disciplina cadastrada.
+                    <TableCell colSpan={canEdit ? 4 : 3} className="py-12">
+                      <EmptySubjectsState />
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell>{courseMap.get(s.course_id) ?? "—"}</TableCell>
-                      <TableCell>{s.workload_hours ?? "—"}</TableCell>
+                    <TableRow key={s.id} className="hover:bg-accent/30 transition-colors">
+                      <TableCell className="font-medium text-foreground">
+                        {s.name}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+                          <span>{courseMap.get(s.course_id) ?? "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground">
+                          {s.workload_hours ? (
+                            <>
+                              <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                              <span>{s.workload_hours}h</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                      </TableCell>
                       {canEdit && (
                         <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditing(s);
-                              setFormOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir a disciplina "{s.name}"? Esta ação
-                                  não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => del.mutate(s.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setEditing(s);
+                                setFormOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="sr-only">Editar</span>
+                            </Button>
+                            <DeleteSubjectDialog
+                              subjectName={s.name}
+                              onConfirm={() => del.mutate(s.id)}
+                              isIconOnly
+                            />
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -296,61 +338,62 @@ export default function DisciplinasPage() {
   );
 }
 
-function SubjectForm({
-  editing,
-  courses,
-  onSubmit,
-  pending,
-}: {
-  editing: Subject | null;
-  courses: Course[];
-  onSubmit: (v: { name: string; workload_hours: number | null; course_id: string }) => void;
-  pending: boolean;
-}) {
-  const [name, setName] = useState(editing?.name ?? "");
-  const [workload, setWorkload] = useState<string>(editing?.workload_hours?.toString() ?? "");
-  const [courseId, setCourseId] = useState<string>(editing?.course_id ?? "");
+{/* ESTADO VAZIO */}
+function EmptySubjectsState() {
   return (
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>{editing ? "Editar disciplina" : "Nova disciplina"}</DialogTitle>
-      </DialogHeader>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit({ name, workload_hours: workload ? Number(workload) : null, course_id: courseId });
-        }}
-        className="space-y-4"
-      >
-        <div>
-          <Label>Curso</Label>
-          <Select value={courseId} onValueChange={setCourseId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione..." />
-            </SelectTrigger>
-            <SelectContent>
-              {courses.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="name">Nome</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div>
-          <Label htmlFor="wl">Carga horária</Label>
-          <Input id="wl" type="number" value={workload} onChange={(e) => setWorkload(e.target.value)} />
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={!name || !courseId || pending}>
-            {pending ? "Salvando..." : "Salvar"}
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 mb-3">
+        <Library className="h-6 w-6" />
+      </div>
+      <p className="text-sm font-medium text-foreground">Nenhuma disciplina cadastrada</p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+        Cadastre disciplinas individualmente ou importe em lote para compor a matriz curricular dos cursos.
+      </p>
+    </div>
+  );
+}
+
+{/* DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO */}
+function DeleteSubjectDialog({
+  subjectName,
+  onConfirm,
+  isIconOnly = false,
+}: {
+  subjectName: string;
+  onConfirm: () => void;
+  isIconOnly?: boolean;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        {isIconOnly ? (
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="sr-only">Excluir</span>
           </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
+        ) : (
+          <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive hover:bg-destructive/10">
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Excluir
+          </Button>
+        )}
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Disciplina</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir a disciplina <strong className="text-foreground">{subjectName}</strong>? Esta ação não pode ser desfeita e pode afetar as turmas vinculadas a ela.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

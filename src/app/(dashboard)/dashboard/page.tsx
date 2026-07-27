@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, BookOpen, Layers, GraduationCap } from "lucide-react";
+import { MapPin, BookOpen, Layers, GraduationCap, ArrowUpRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useActiveTenant } from "@/lib/tenant";
 import { useSession } from "@/lib/session";
@@ -9,6 +9,7 @@ import { PageBody, PageHeader } from "@/components/page";
 import { Card, CardContent } from "@/components/ui/card";
 import { ROLE_LABELS } from "@/lib/roles";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   const active = useActiveTenant();
@@ -33,14 +34,26 @@ export default function DashboardPage() {
     enabled: !!active.institutionId,
   });
 
+  // Tela de Loading Principal (Skeletons)
   if (isLoadingUser || !user) {
     return (
       <>
-        <PageHeader title="Carregando..." description="Aguarde um instante" />
+        <div className="flex flex-col gap-1 px-6 pt-6">
+          <Skeleton className="h-8 w-64 rounded-lg" />
+          <Skeleton className="h-4 w-40 rounded-md mt-1" />
+        </div>
         <PageBody>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-[120px] w-full" />
+              <Card key={index} className="border-border/50 bg-card/50">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-20 rounded-md" />
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                  </div>
+                  <Skeleton className="mt-3 h-8 w-16 rounded-md" />
+                </CardContent>
+              </Card>
             ))}
           </div>
         </PageBody>
@@ -51,35 +64,84 @@ export default function DashboardPage() {
   const poloCount = active.isPoloScoped ? active.scopedPoloIds.length : data?.polos;
 
   const cards = [
-    { label: "Polos", value: isLoadingStats ? "..." : poloCount ?? "—", icon: MapPin },
-    { label: "Cursos", value: isLoadingStats ? "..." : data?.courses ?? "—", icon: BookOpen },
-    { label: "Turmas", value: isLoadingStats ? "..." : data?.classes ?? "—", icon: Layers },
-    { label: "Alunos", value: isLoadingStats ? "..." : data?.students ?? "—", icon: GraduationCap },
+    {
+      label: "Polos",
+      value: poloCount,
+      icon: MapPin,
+      description: active.isPoloScoped ? "Polos atribuídos" : "Polos ativos",
+    },
+    {
+      label: "Cursos",
+      value: data?.courses,
+      icon: BookOpen,
+      description: "Cadastrados no sistema",
+    },
+    {
+      label: "Turmas",
+      value: data?.classes,
+      icon: Layers,
+      description: "Em andamento ou abertas",
+    },
+    {
+      label: "Alunos",
+      value: data?.students,
+      icon: GraduationCap,
+      description: "Matriculados na instituição",
+    },
   ];
+
+  const userName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "Usuário";
+  const userRole = ROLE_LABELS[active.role] ?? active.role;
 
   return (
     <>
       <PageHeader
-        title={`Olá, ${user.user_metadata.full_name}`}
-        description={`Você está como ${ROLE_LABELS[active.role]}.`}
+        title={
+          <div className="flex items-center gap-3">
+            <span>Olá, {userName}</span>
+            <Badge variant="secondary" className="font-normal text-xs bg-accent/60 text-muted-foreground">
+              {userRole}
+            </Badge>
+          </div>
+        }
+        description="Acompanhe o panorama geral da sua instituição acadêmica."
       />
+
       <PageBody>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {cards.map((c, index) => (
             <Card
               key={c.label}
+              className="group relative overflow-hidden border-border/50 bg-card/60 transition-all duration-300 hover:border-primary/40 hover:bg-card hover:shadow-md hover:shadow-primary/5"
               style={{
-                animation: `fadeInUp 0.5s ease-out forwards`,
-                animationDelay: `${index * 100}ms`,
+                animation: `fadeInUp 0.4s ease-out forwards`,
+                animationDelay: `${index * 80}ms`,
                 opacity: 0,
               }}
             >
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">{c.label}</span>
-                  <c.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+                    {c.label}
+                  </span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-transform duration-200 group-hover:scale-105">
+                    <c.icon className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className="mt-2 text-3xl font-semibold tracking-tight">{c.value}</div>
+
+                <div className="mt-3 flex items-baseline justify-between">
+                  <span className="text-3xl font-bold tracking-tight text-foreground">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-16" />
+                    ) : (
+                      typeof c.value === "number" ? c.value.toLocaleString("pt-BR") : (c.value ?? "—")
+                    )}
+                  </span>
+                </div>
+
+                <p className="mt-1 text-[11px] text-muted-foreground/70">
+                  {c.description}
+                </p>
               </CardContent>
             </Card>
           ))}

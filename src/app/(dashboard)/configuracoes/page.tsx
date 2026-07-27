@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Check, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
   AlertDialog,
@@ -46,7 +46,12 @@ export default function ConfigPage() {
   const isOwner = tenant.active?.role === "owner";
 
   if (!tenant.active) {
-    return <div className="p-6"><p>Carregando...</p></div>;
+    return (
+      <div className="flex h-48 items-center justify-center p-6 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Carregando configurações...
+      </div>
+    );
   }
 
   return (
@@ -57,7 +62,7 @@ export default function ConfigPage() {
       />
       <PageBody>
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-1 sm:grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="general">Geral</TabsTrigger>
             <TabsTrigger value="institutions">Instituições</TabsTrigger>
             <TabsTrigger value="danger">Perigo</TabsTrigger>
@@ -69,7 +74,17 @@ export default function ConfigPage() {
             <InstitutionsList />
           </TabsContent>
           <TabsContent value="danger" className="mt-6">
-            {isOwner ? <DangerZone /> : <p className="text-sm text-muted-foreground">Apenas o proprietário (owner) da instituição pode ver esta seção.</p>}
+            {isOwner ? (
+              <DangerZone />
+            ) : (
+              <Card className="max-w-xl">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">
+                    Apenas o proprietário (owner) da instituição tem acesso à Zona de Perigo.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </PageBody>
@@ -77,32 +92,43 @@ export default function ConfigPage() {
   );
 }
 
+const generalSchema = z.object({
+  name: z.string().trim().min(2, "Mínimo 2 caracteres").max(120, "Máximo 120 caracteres"),
+  city: z.string().trim().min(2, "Mínimo 2 caracteres").max(80, "Máximo 80 caracteres"),
+  state: z.string().trim().min(2, "Mínimo 2 caracteres").max(40, "Máximo 40 caracteres"),
+});
+
 function GeneralSettings() {
   const tenant = useTenant();
   const qc = useQueryClient();
-  
-  // Initialize state with empty strings for safety
-  const [name, setName] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-
-  // Effect to sync form state with tenant data when it becomes available
-  useEffect(() => {
-    if (tenant.active) {
-      setName(tenant.active.institutionName ?? "");
-      setCity(tenant.active.city ?? "");
-      setState(tenant.active.state ?? "");
-    }
-  }, [tenant.active]);
 
   const canAdmin = tenant.active ? isAdminLike(tenant.active.role) : false;
 
+  const form = useForm<z.infer<typeof generalSchema>>({
+    resolver: zodResolver(generalSchema),
+    defaultValues: {
+      name: tenant.active?.institutionName ?? "",
+      city: tenant.active?.city ?? "",
+      state: tenant.active?.state ?? "",
+    },
+  });
+
+  useEffect(() => {
+    if (tenant.active) {
+      form.reset({
+        name: tenant.active.institutionName ?? "",
+        city: tenant.active.city ?? "",
+        state: tenant.active.state ?? "",
+      });
+    }
+  }, [tenant.active, form]);
+
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: z.infer<typeof generalSchema>) => {
       if (!tenant.active) throw new Error("No active institution");
       const { error } = await supabase
         .from("institutions")
-        .update({ name, city, state })
+        .update({ name: values.name, city: values.city, state: values.state })
         .eq("id", tenant.active.institutionId);
       if (error) throw error;
     },
@@ -120,29 +146,40 @@ function GeneralSettings() {
         <CardTitle>Informações Gerais</CardTitle>
         <CardDescription>Dados de identificação da sua instituição.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Label>Nome da Instituição</Label>
-          <Input value={name ?? ""} onChange={(e) => setName(e.target.value)} disabled={!canAdmin} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <form onSubmit={form.handleSubmit((v) => save.mutate(v))}>
+        <CardContent className="space-y-4">
           <div>
-            <Label>Cidade</Label>
-            <Input value={city ?? ""} onChange={(e) => setCity(e.target.value)} disabled={!canAdmin} />
+            <Label htmlFor="inst-name">Nome da Instituição</Label>
+            <Input id="inst-name" {...form.register("name")} disabled={!canAdmin} />
+            {form.formState.errors.name && (
+              <p className="mt-1 text-xs text-destructive">{form.formState.errors.name.message}</p>
+            )}
           </div>
-          <div>
-            <Label>Estado</Label>
-            <Input value={state ?? ""} onChange={(e) => setState(e.target.value)} disabled={!canAdmin} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="inst-city">Cidade</Label>
+              <Input id="inst-city" {...form.register("city")} disabled={!canAdmin} />
+              {form.formState.errors.city && (
+                <p className="mt-1 text-xs text-destructive">{form.formState.errors.city.message}</p>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="inst-state">Estado</Label>
+              <Input id="inst-state" {...form.register("state")} disabled={!canAdmin} />
+              {form.formState.errors.state && (
+                <p className="mt-1 text-xs text-destructive">{form.formState.errors.state.message}</p>
+              )}
+            </div>
           </div>
-        </div>
-      </CardContent>
-      {canAdmin && (
-        <CardFooter>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Salvando..." : "Salvar Alterações"}
-          </Button>
-        </CardFooter>
-      )}
+        </CardContent>
+        {canAdmin && (
+          <CardFooter>
+            <Button type="submit" disabled={save.isPending || !form.formState.isDirty}>
+              {save.isPending ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </CardFooter>
+        )}
+      </form>
     </Card>
   );
 }
@@ -150,31 +187,55 @@ function GeneralSettings() {
 function InstitutionsList() {
   const { memberships, active, loading } = useTenant();
 
+  const handleSwitchInstitution = (institutionId: string) => {
+    localStorage.setItem("active_institution_id", institutionId);
+    toast.success("Alternando instituição...");
+    window.location.reload();
+  };
+
   return (
     <Card className="max-w-xl">
       <CardHeader>
         <CardTitle>Suas Instituições</CardTitle>
-        <CardDescription>Você pode criar ou entrar em outras instituições.</CardDescription>
+        <CardDescription>Você pode gerenciar ou trocar entre suas instituições.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-3">
         {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
         {memberships.map((m) => {
           const isActive = m.institutionId === active?.institutionId;
           return (
-            <div key={m.institutionId} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${isActive ? "border-primary/50 bg-primary/5" : ""}`}>
-              <div className="flex items-center gap-3">
-                <Building2 className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                <p className={`font-medium ${isActive ? "text-primary" : ""}`}>{m.institutionName}</p>
+            <div
+              key={m.institutionId}
+              className={`flex items-center justify-between gap-3 rounded-lg border p-3.5 transition-colors ${
+                isActive ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-accent/50"
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Building2 className={`h-5 w-5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                <p className={`font-medium truncate ${isActive ? "text-primary" : ""}`}>{m.institutionName}</p>
               </div>
-              {isActive && <Badge variant="secondary">Ativa</Badge>}
+
+              {isActive ? (
+                <Badge variant="secondary" className="shrink-0 gap-1">
+                  <Check className="h-3 w-3" /> Ativa
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleSwitchInstitution(m.institutionId)}
+                >
+                  Alternar
+                </Button>
+              )}
             </div>
           );
         })}
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t">
         <CreateInstitutionDialog />
         <Button asChild variant="outline">
-          <Link href="/onboarding">Trocar de instituição</Link>
+          <Link href="/onboarding">Ver todas no onboarding</Link>
         </Button>
       </CardFooter>
     </Card>
@@ -182,16 +243,14 @@ function InstitutionsList() {
 }
 
 const instSchema = z.object({
-  name: z.string().trim().min(2, "Mínimo 2 caracteres").max(120),
-  city: z.string().trim().min(2).max(80),
-  state: z.string().trim().min(2).max(40),
+  name: z.string().trim().min(2, "Mínimo 2 caracteres").max(120, "Máximo 120 caracteres"),
+  city: z.string().trim().min(2, "Mínimo 2 caracteres").max(80, "Máximo 80 caracteres"),
+  state: z.string().trim().min(2, "Mínimo 2 caracteres").max(40, "Máximo 40 caracteres"),
   logo_url: z.string().url("URL inválida").optional().or(z.literal("")),
 });
 
 function CreateInstitutionDialog() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const tenant = useTenant();
   const form = useForm<z.infer<typeof instSchema>>({
     resolver: zodResolver(instSchema),
     defaultValues: { name: "", city: "", state: "", logo_url: "" },
@@ -201,8 +260,7 @@ function CreateInstitutionDialog() {
     mutationFn: bootstrapInstitutionAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
-      toast.success("Instituição criada! Trocando para a nova instituição...");
-      // We can't just refetch, we need to fully reload to re-run the root layout logic
+      toast.success("Instituição criada com sucesso!");
       window.location.href = "/dashboard";
     },
     onError: (e: Error) => toast.error(e.message),
@@ -211,29 +269,37 @@ function CreateInstitutionDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button><Plus className="mr-2 h-4 w-4" /> Criar Nova Instituição</Button>
+        <Button>
+          <Plus className="mr-2 h-4 w-4" /> Criar Nova Instituição
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Nova Instituição</DialogTitle>
-          <DialogDescription>Preencha os dados básicos.</DialogDescription>
+          <DialogDescription>Preencha os dados básicos para cadastrar uma nova instituição.</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit((v) => m.mutate(v))} className="space-y-4">
           <div>
-            <Label htmlFor="name">Nome da Instituição</Label>
-            <Input id="name" {...form.register("name")} />
+            <Label htmlFor="new-name">Nome da Instituição</Label>
+            <Input id="new-name" placeholder="Ex: Faculdade Central" {...form.register("name")} />
             {form.formState.errors.name && (
               <p className="mt-1 text-xs text-destructive">{form.formState.errors.name.message}</p>
             )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="city">Cidade</Label>
-              <Input id="city" {...form.register("city")} />
+              <Label htmlFor="new-city">Cidade</Label>
+              <Input id="new-city" placeholder="Ex: São Paulo" {...form.register("city")} />
+              {form.formState.errors.city && (
+                <p className="mt-1 text-xs text-destructive">{form.formState.errors.city.message}</p>
+              )}
             </div>
             <div>
-              <Label htmlFor="state">Estado</Label>
-              <Input id="state" maxLength={40} {...form.register("state")} />
+              <Label htmlFor="new-state">Estado</Label>
+              <Input id="new-state" placeholder="Ex: SP" maxLength={40} {...form.register("state")} />
+              {form.formState.errors.state && (
+                <p className="mt-1 text-xs text-destructive">{form.formState.errors.state.message}</p>
+              )}
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={m.isPending}>
@@ -248,6 +314,10 @@ function CreateInstitutionDialog() {
 function DangerZone() {
   const tenant = useTenant();
   const router = useRouter();
+  const [confirmName, setConfirmName] = useState("");
+
+  const targetName = tenant.active?.name ?? "";
+  const isMatch = confirmName.trim() === targetName.trim();
 
   const deleteMut = useMutation({
     mutationFn: async () => {
@@ -256,7 +326,7 @@ function DangerZone() {
     },
     onSuccess: () => {
       toast.success("Instituição excluída.");
-      // Force refetch of user's memberships and redirect to onboarding
+      localStorage.removeItem("active_institution_id");
       tenant.refetch();
       router.replace("/onboarding");
     },
@@ -264,18 +334,18 @@ function DangerZone() {
   });
 
   return (
-    <Card className="max-w-xl border-destructive">
+    <Card className="max-w-xl border-destructive/50">
       <CardHeader>
         <CardTitle className="text-destructive">Zona de Perigo</CardTitle>
-        <CardDescription>Ações irreversíveis. Tenha muito cuidado.</CardDescription>
+        <CardDescription>Ações irreversíveis. Tenha muito cuidado com estas operações.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col text-center sm:flex-row sm:text-left sm:items-center sm:justify-between gap-4 rounded-lg border border-dashed border-destructive/50 p-4">
+        <div className="flex flex-col text-center sm:flex-row sm:text-left sm:items-center sm:justify-between gap-4 rounded-lg border border-dashed border-destructive/40 p-4 bg-destructive/5">
           <div>
-            <h3 className="font-semibold">Excluir esta instituição</h3>
-            <p className="text-sm text-muted-foreground">Todo o conteúdo será permanentemente apagado.</p>
+            <h3 className="font-semibold text-foreground">Excluir esta instituição</h3>
+            <p className="text-sm text-muted-foreground">Todo o conteúdo e vínculos serão permanentemente apagados.</p>
           </div>
-          <AlertDialog>
+          <AlertDialog onOpenChange={(open) => !open && setConfirmName("")}>
             <AlertDialogTrigger asChild>
               <Button variant="destructive">
                 <Trash2 className="mr-2 h-4 w-4" /> Excluir
@@ -283,20 +353,34 @@ function DangerZone() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. Isso excluirá permanentemente a instituição
-                  <strong className="mx-1">{tenant.active?.name}</strong>
-                  e todos os seus dados.
+                <AlertDialogTitle>Excluir {targetName}?</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    Esta ação é <strong className="text-destructive">irreversível</strong>. Todos os dados,
+                    convites e acessos vinculados a esta instituição serão destruídos.
+                  </p>
+                  <p className="text-sm">
+                    Para confirmar, digite <strong className="text-foreground">{targetName}</strong> abaixo:
+                  </p>
                 </AlertDialogDescription>
               </AlertDialogHeader>
+
+              <div className="py-2">
+                <Input
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={targetName}
+                />
+              </div>
+
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-destructive hover:bg-destructive/90"
+                  disabled={!isMatch || deleteMut.isPending}
                   onClick={() => deleteMut.mutate()}
                 >
-                  Sim, excluir
+                  {deleteMut.isPending ? "Excluindo..." : "Sim, excluir instituição"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -306,4 +390,3 @@ function DangerZone() {
     </Card>
   );
 }
-

@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, ChangeEvent } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Loader2, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { Input } from "@/components/ui/input";
@@ -18,15 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -42,36 +34,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { z } from "zod";
 
-type Status = "ativo" | "trancado" | "formado" | "evadido" | "transferido";
-type Student = {
-  id: string;
-  registration: string;
-  name: string;
-  cpf: string | null;
-  email: string | null;
-  status: Status;
-  class_id: string;
-};
-
-const STATUS_OPTIONS: { value: Status; label: string }[] = [
-  { value: "ativo", label: "Ativo" },
-  { value: "trancado", label: "Trancado" },
-  { value: "formado", label: "Formado" },
-  { value: "evadido", label: "Evadido" },
-  { value: "transferido", label: "Transferido" },
-];
+import { Student, Status, STATUS_OPTIONS } from "@/lib/types/students";
+import {
+  saveStudentAction,
+  deleteStudentAction,
+  importStudentsAction,
+  updateStudentStatusAction,
+} from "./actions";
+import { StudentFormDialog } from "@/components/alunos/student-form-dialog";
+import { ImportDialog } from "@/components/alunos/import-dialog";
+import { ExportAlunosDialog } from "@/components/alunos/export-dialog";
 
 export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boolean }) {
   const tenant = useTenant();
   const qc = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Student | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [editing, setEditing] = useState<Student | null>(null);
   const [search, setSearch] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const { data: classes = [] } = useQuery({
     queryKey: ["classes-basic-form", tenant.active?.institutionId],
@@ -108,6 +92,19 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
     enabled: !!turmaId,
   });
 
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, newStatus }: { id: string; newStatus: Status }) => {
+      setUpdatingId(id);
+      await updateStudentStatusAction({ studentId: id, status: newStatus });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["students", turmaId] });
+      toast.success("Status atualizado com sucesso.");
+    },
+    onError: (e: Error) => toast.error(`Erro ao atualizar status: ${e.message}`),
+    onSettled: () => setUpdatingId(null),
+  });
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return data;
@@ -117,17 +114,7 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
   }, [data, search]);
 
   const save = useMutation({
-    mutationFn: async (v: Omit<Student, "id">) => {
-      if (!tenant.active) throw new Error("No active institution");
-      const payload = { ...v, institution_id: tenant.active.institutionId };
-      if (editing) {
-        const { error } = await supabase.from("students").update(payload).eq("id", editing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("students").insert(payload);
-        if (error) throw error;
-      }
-    },
+    mutationFn: saveStudentAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
       setFormOpen(false);
@@ -138,10 +125,7 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("students").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: deleteStudentAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
       toast.success("Aluno excluído com sucesso.");
@@ -150,17 +134,11 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
   });
 
   const importFn = useMutation({
-    mutationFn: async (rows: Array<Omit<Student, "id">>) => {
-      if (!tenant.active) throw new Error("No active institution");
-      const { error } = await supabase
-        .from("students")
-        .insert(rows.map((r) => ({ ...r, institution_id: tenant.active!.institutionId })));
-      if (error) throw error;
-    },
-    onSuccess: (_, rows) => {
+    mutationFn: importStudentsAction,
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
       setImportOpen(false);
-      toast.success(`${rows.length} alunos importados com sucesso.`);
+      toast.success(`${data?.count ?? 0} alunos importados com sucesso.`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -181,45 +159,60 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        {canEdit && (
-          <div className="flex gap-2">
-            <Dialog open={importOpen} onOpenChange={setImportOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                  <Upload className="mr-1 h-4 w-4" /> Importar
-                </Button>
-              </DialogTrigger>
-              <ImportDialog
-                classes={classes}
-                defaultClassId={turmaId}
-                onImport={(rows) => importFn.mutate(rows)}
-                pending={importFn.isPending}
-              />
-            </Dialog>
-            <Dialog
-              open={formOpen}
-              onOpenChange={(o) => {
-                setFormOpen(o);
-                if (!o) setEditing(null);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-1 h-4 w-4" /> Novo aluno
-                </Button>
-              </DialogTrigger>
-              <StudentForm
-                key={editing?.id}
-                editing={editing}
-                classes={classes}
-                defaultClassId={turmaId}
-                onSubmit={(v) => save.mutate(v)}
-                pending={save.isPending}
-              />
-            </Dialog>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Download className="mr-1 h-4 w-4" /> Exportar
+              </Button>
+            </DialogTrigger>
+            <ExportAlunosDialog
+              students={filtered}
+              classMap={classMap}
+              onClose={() => setExportOpen(false)}
+            />
+          </Dialog>
+          {canEdit && (
+            <>
+              <Dialog open={importOpen} onOpenChange={setImportOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Upload className="mr-1 h-4 w-4" /> Importar
+                  </Button>
+                </DialogTrigger>
+                <ImportDialog
+                  classes={classes}
+                  defaultClassId={turmaId}
+                  onImport={(rows) => importFn.mutate(rows)}
+                  pending={importFn.isPending}
+                />
+              </Dialog>
+              <Dialog
+                open={formOpen}
+                onOpenChange={(o) => {
+                  setFormOpen(o);
+                  if (!o) setEditing(null);
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="mr-1 h-4 w-4" /> Novo aluno
+                  </Button>
+                </DialogTrigger>
+                <StudentFormDialog
+                  key={editing?.id}
+                  editing={editing}
+                  classes={classes}
+                  defaultClassId={turmaId}
+                  onSubmit={(v) => save.mutate(v)}
+                  pending={save.isPending}
+                />
+              </Dialog>
+            </>
+          )}
+        </div>
       </div>
+
       <div>
         {/* Mobile View: Cards */}
         <div className="md:hidden">
@@ -231,11 +224,27 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
             <div className="space-y-4">
               {filtered.map((s) => (
                 <div key={s.id} className="rounded-lg border bg-card p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold">{s.name}</span>
-                    <Badge variant="secondary">
-                      {STATUS_OPTIONS.find((x) => x.value === s.status)?.label}
-                    </Badge>
+                    <Select
+                      value={s.status}
+                      onValueChange={(val) =>
+                        updateStatus.mutate({ id: s.id, newStatus: val as Status })
+                      }
+                      disabled={updatingId === s.id}
+                    >
+                      <SelectTrigger className="w-[130px] h-8 text-xs">
+                        {updatingId === s.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <p>
@@ -296,20 +305,20 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Turma</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="w-[160px]">Status</TableHead>
                 {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 5 : 4} className="py-8 text-center text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={canEdit ? 5 : 4} className="py-8 text-center text-muted-foreground">
                     Nenhum aluno encontrado.
                   </TableCell>
                 </TableRow>
@@ -322,9 +331,25 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
                       {classMap.get(s.class_id) ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">
-                        {STATUS_OPTIONS.find((x) => x.value === s.status)?.label}
-                      </Badge>
+                      <Select
+                        value={s.status}
+                        onValueChange={(val) =>
+                          updateStatus.mutate({ id: s.id, newStatus: val as Status })
+                        }
+                        disabled={updatingId === s.id}
+                      >
+                        <SelectTrigger className="w-[130px] h-8 text-xs">
+                          {updatingId === s.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STATUS_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     {canEdit && (
                       <TableCell className="text-right">
@@ -370,211 +395,5 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
         </div>
       </div>
     </div>
-  );
-}
-
-function StudentForm({
-  editing,
-  classes,
-  defaultClassId,
-  onSubmit,
-  pending,
-}: {
-  editing: Student | null;
-  classes: { id: string; label: string }[];
-  defaultClassId: string;
-  onSubmit: (v: Omit<Student, "id">) => void;
-  pending: boolean;
-}) {
-  const [reg, setReg] = useState(editing?.registration ?? "");
-  const [name, setName] = useState(editing?.name ?? "");
-  const [cpf, setCpf] = useState(editing?.cpf ?? "");
-  const [email, setEmail] = useState(editing?.email ?? "");
-  const [status, setStatus] = useState<Status>(editing?.status ?? "ativo");
-  const [classId, setClassId] = useState<string>(editing?.class_id ?? defaultClassId);
-  return (
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>{editing ? "Editar aluno" : "Novo aluno"}</DialogTitle>
-      </DialogHeader>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit({
-            registration: reg,
-            name,
-            cpf: cpf || null,
-            email: email || null,
-            status,
-            class_id: classId,
-          });
-        }}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="reg">Matrícula</Label>
-            <Input id="reg" value={reg} onChange={(e) => setReg(e.target.value)} required />
-          </div>
-          <div>
-            <Label>Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div>
-          <Label htmlFor="name">Nome</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="cpf">CPF</Label>
-            <Input id="cpf" value={cpf ?? ""} onChange={(e) => setCpf(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email ?? ""}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-        </div>
-        <div>
-          <Label>Turma</Label>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione..." />
-            </SelectTrigger>
-            <SelectContent>
-              {classes.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={!reg || !name || !classId || pending}>
-            {pending ? "Salvando..." : "Salvar"}
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
-  );
-}
-
-const studentSchema = z.object({
-  registration: z.string().min(1),
-  name: z.string().min(1),
-  cpf: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable(),
-  status: z.enum(["ativo", "trancado", "formado", "evadido", "transferido"]).default("ativo"),
-});
-
-const importSchema = z.array(studentSchema);
-
-function ImportDialog({
-  classes,
-  defaultClassId,
-  onImport,
-  pending,
-}: {
-  classes: { id: string; label: string }[];
-  defaultClassId: string;
-  onImport: (rows: Array<Omit<Student, "id">>) => void;
-  pending: boolean;
-}) {
-  const [classId, setClassId] = useState<string>(defaultClassId);
-  const [fileContent, setFileContent] = useState<string>("");
-
-  const example = `[
-  { "registration": "2025001", "name": "Ana Souza", "cpf": "000.000.000-00", "email": "ana@ex.com", "status": "ativo" },
-  { "registration": "2025002", "name": "Bruno Lima" }
-]`;
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result;
-      setFileContent(typeof text === 'string' ? text : '');
-    };
-    reader.readAsText(file);
-  };
-
-  function handleImport() {
-    try {
-      const parsed = JSON.parse(fileContent);
-      const validated = importSchema.parse(parsed);
-      
-      const rows = validated.map((r) => ({
-        ...r,
-        class_id: classId,
-      }));
-      onImport(rows);
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        console.error(e.errors);
-        toast.error("Erro de validação no JSON. Verifique o formato e os campos.");
-      } else {
-        toast.error((e as Error).message);
-      }
-    }
-  }
-
-  return (
-    <DialogContent className="max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>Importar alunos (JSON)</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div>
-          <Label>1. Turma de destino</Label>
-          <Select value={classId} onValueChange={setClassId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione a turma para onde os alunos serão importados..." />
-            </SelectTrigger>
-            <SelectContent>
-              {classes.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>2. Arquivo JSON</Label>
-          <Input type="file" accept=".json" onChange={handleFileChange} />
-          <p className="text-xs text-muted-foreground mt-2">
-            O arquivo deve ser um array de objetos. Cada objeto deve conter no mínimo `registration` e `name`.
-          </p>
-        </div>
-        <details className="text-xs">
-          <summary className="cursor-pointer">Ver modelo do JSON</summary>
-          <pre className="mt-2 rounded-md bg-muted p-4 text-muted-foreground whitespace-pre-wrap break-words">{example}</pre>
-        </details>
-      </div>
-      <DialogFooter>
-        <Button onClick={handleImport} disabled={!classId || !fileContent || pending}>
-          {pending ? "Importando..." : "Importar"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
   );
 }

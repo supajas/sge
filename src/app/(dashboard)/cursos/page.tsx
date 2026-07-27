@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  GraduationCap,
+  MapPin,
+  Loader2,
+  BookOpen,
+  Check,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -22,6 +31,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -39,6 +49,8 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
 type Course = { id: string; name: string; code: string | null; polo_ids: string[] };
@@ -99,7 +111,7 @@ export default function CursosPage() {
 
   const save = useMutation({
     mutationFn: async (v: { name: string; code: string; polo_ids: string[] }) => {
-      if (!tenant.active) throw new Error("No active institution");
+      if (!tenant.active) throw new Error("Sem instituição ativa");
       let courseId = editing?.id;
       if (editing) {
         const { error } = await supabase
@@ -116,7 +128,8 @@ export default function CursosPage() {
         if (error || !c) throw error;
         courseId = c.id;
       }
-      // sync polos
+
+      // Sync polos
       await supabase.from("course_polos").delete().eq("course_id", courseId!);
       if (v.polo_ids.length) {
         await supabase
@@ -126,10 +139,10 @@ export default function CursosPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["courses"] });
-      qc.invalidateQueries({ queryKey: ["polos"] }); // Invalidate polos in case names change
+      qc.invalidateQueries({ queryKey: ["polos"] });
       setFormOpen(false);
       setEditing(null);
-      toast.success("Curso salvo com sucesso.");
+      toast.success(editing ? "Curso atualizado com sucesso." : "Curso cadastrado com sucesso.");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -148,17 +161,20 @@ export default function CursosPage() {
 
   if (!tenant.active) {
     return (
-      <div className="p-6">
-        <p>Carregando...</p>
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48 rounded-md" />
+        <Skeleton className="h-12 w-full rounded-lg" />
       </div>
     );
   }
+
+  const coursesWithPolosCount = data.filter((c) => c.polo_ids.length > 0).length;
 
   return (
     <>
       <PageHeader
         title="Cursos"
-        description="Cursos da instituição e seus polos."
+        description="Gerencie os cursos oferecidos e sua distribuição pelos polos."
         actions={
           canEdit && (
             <Dialog
@@ -169,12 +185,12 @@ export default function CursosPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-1 h-4 w-4" /> Novo curso
+                <Button size="sm" className="shadow-2xs">
+                  <Plus className="mr-1.5 h-4 w-4" /> Novo Curso
                 </Button>
               </DialogTrigger>
               <CourseForm
-                key={editing?.id}
+                key={editing?.id ?? "new"}
                 editing={editing}
                 polos={polos}
                 onSubmit={(v) => save.mutate(v)}
@@ -185,147 +201,153 @@ export default function CursosPage() {
         }
       />
       <PageBody>
-        <div>
-          {/* Mobile View: Cards */}
-          <div className="md:hidden">
-            {isLoading ? (
-              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
-            ) : data.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">Nenhum curso cadastrado.</div>
-            ) : (
-              <div className="space-y-4">
-                {data.map((c) => (
-                  <div key={c.id} className="rounded-lg border bg-card p-4">
-                    <div className="font-semibold">{c.name}</div>
-                    <div className="text-sm text-muted-foreground">Código: {c.code ?? "N/A"}</div>
+        <div className="space-y-6">
+          {/* Métricas Rápidas */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Total de Cursos</p>
+                  <p className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : data.length}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-                    <div className="mt-2 text-sm font-medium">Polos:</div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {c.polo_ids.map((pid) => {
-                        const p = polos.find((x) => x.id === pid);
-                        return p ? (
-                          <Badge key={pid} variant="secondary">{p.name}</Badge>
-                        ) : null;
-                      })}
-                      {c.polo_ids.length === 0 && <p className="text-xs text-muted-foreground">Nenhum polo associado.</p>}
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Ofertados em Polos</p>
+                  <p className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : `${coursesWithPolosCount} / ${data.length}`}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* VISÃO MOBILE: CARDS */}
+          <div className="md:hidden space-y-3">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 w-full rounded-xl" />
+              ))
+            ) : data.length === 0 ? (
+              <EmptyCoursesState />
+            ) : (
+              data.map((c) => (
+                <Card key={c.id} className="border-border/60 bg-card/80 shadow-2xs">
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-semibold text-foreground text-base tracking-tight">{c.name}</h4>
+                        {c.code && (
+                          <Badge variant="outline" className="font-mono text-[10px] shrink-0">
+                            {c.code}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="pt-1">
+                        <span className="text-[11px] font-medium text-muted-foreground block mb-1.5">Polos Associados:</span>
+                        <PoloBadges poloIds={c.polo_ids} polosList={polos} />
+                      </div>
                     </div>
 
                     {canEdit && (
-                      <div className="mt-4 flex justify-end gap-2">
+                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border/40 pt-3">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="ghost"
+                          className="h-8 text-xs hover:bg-accent"
                           onClick={() => {
                             setEditing(c);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir o curso "{c.name}"? Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => del.mutate(c.id)}>
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <DeleteCourseDialog name={c.name} onConfirm={() => del.mutate(c.id)} />
                       </div>
                     )}
-                  </div>
-                ))}
-              </div>
+                  </CardContent>
+                </Card>
+              ))
             )}
           </div>
 
-          {/* Desktop View: Table */}
-          <div className="hidden rounded-lg border bg-card md:block">
+          {/* VISÃO DESKTOP: TABELA */}
+          <div className="hidden rounded-xl border border-border/60 bg-card/60 shadow-2xs overflow-hidden md:block">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Polos</TableHead>
-                  {canEdit && <TableHead className="w-24 text-right">Ações</TableHead>}
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="font-semibold text-foreground">Nome do Curso</TableHead>
+                  <TableHead className="font-semibold text-foreground w-36">Código</TableHead>
+                  <TableHead className="font-semibold text-foreground">Polos Atendidos</TableHead>
+                  {canEdit && <TableHead className="w-28 text-right font-semibold text-foreground">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-5 w-52" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                      {canEdit && <TableCell><Skeleton className="h-8 w-16 ml-auto" /></TableCell>}
+                    </TableRow>
+                  ))
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                      Nenhum curso cadastrado.
+                    <TableCell colSpan={canEdit ? 4 : 3} className="py-12">
+                      <EmptyCoursesState />
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
-                      <TableCell>{c.code ?? "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {c.polo_ids.map((pid) => {
-                            const p = polos.find((x) => x.id === pid);
-                            return p ? (
-                              <Badge key={pid} variant="secondary">
-                                {p.name}
-                              </Badge>
-                            ) : null;
-                          })}
+                    <TableRow key={c.id} className="hover:bg-accent/30 transition-colors">
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+                          <span>{c.name}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {c.code ? (
+                          <Badge variant="outline" className="font-mono text-[11px]">
+                            {c.code}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <PoloBadges poloIds={c.polo_ids} polosList={polos} maxVisible={3} />
                       </TableCell>
                       {canEdit && (
                         <TableCell className="text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditing(c);
-                              setFormOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir o curso "{c.name}"? Esta ação não
-                                  pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => del.mutate(c.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                setEditing(c);
+                                setFormOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="sr-only">Editar</span>
+                            </Button>
+                            <DeleteCourseDialog name={c.name} onConfirm={() => del.mutate(c.id)} isIconOnly />
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -340,6 +362,95 @@ export default function CursosPage() {
   );
 }
 
+{/* COMPONENTE AUXILIAR PARA BADGES DE POLOS COM LIMITE VISUAL */}
+function PoloBadges({ poloIds, polosList, maxVisible }: { poloIds: string[]; polosList: Polo[]; maxVisible?: number }) {
+  if (poloIds.length === 0) {
+    return <span className="text-xs text-muted-foreground">Nenhum polo associado</span>;
+  }
+
+  const visibleIds = maxVisible ? poloIds.slice(0, maxVisible) : poloIds;
+  const remainingCount = maxVisible ? poloIds.length - maxVisible : 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {visibleIds.map((pid) => {
+        const p = polosList.find((x) => x.id === pid);
+        return p ? (
+          <Badge key={pid} variant="secondary" className="bg-muted/80 text-foreground font-normal text-[11px] border border-border/40">
+            {p.name}
+          </Badge>
+        ) : null;
+      })}
+      {remainingCount > 0 && (
+        <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground">
+          +{remainingCount} polo{remainingCount > 1 ? "s" : ""}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+{/* ESTADO VAZIO */}
+function EmptyCoursesState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 mb-3">
+        <GraduationCap className="h-6 w-6" />
+      </div>
+      <p className="text-sm font-medium text-foreground">Nenhum curso cadastrado</p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+        Cadastre os cursos oferecidos pela instituição para associar disciplinas e polos.
+      </p>
+    </div>
+  );
+}
+
+{/* DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO */}
+function DeleteCourseDialog({
+  name,
+  onConfirm,
+  isIconOnly = false,
+}: {
+  name: string;
+  onConfirm: () => void;
+  isIconOnly?: boolean;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        {isIconOnly ? (
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="sr-only">Excluir</span>
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive hover:bg-destructive/10">
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Excluir
+          </Button>
+        )}
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Curso</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir o curso <strong className="text-foreground">{name}</strong>? Esta ação não pode ser desfeita e removerá os vínculos com turmas e matérias.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Excluir Curso
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+{/* FORMULÁRIO */}
 function CourseForm({
   editing,
   polos,
@@ -354,48 +465,115 @@ function CourseForm({
   const [name, setName] = useState(editing?.name ?? "");
   const [code, setCode] = useState(editing?.code ?? "");
   const [poloIds, setPoloIds] = useState<string[]>(editing?.polo_ids ?? []);
+
+  const selectAllPolos = () => setPoloIds(polos.map((p) => p.id));
+  const clearAllPolos = () => setPoloIds([]);
+
   return (
-    <DialogContent>
+    <DialogContent className="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>{editing ? "Editar curso" : "Novo curso"}</DialogTitle>
+        <DialogTitle>{editing ? "Editar Curso" : "Cadastrar Novo Curso"}</DialogTitle>
+        <DialogDescription>
+          Preencha o nome, código e selecione em quais polos este curso estará disponível.
+        </DialogDescription>
       </DialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit({ name, code, polo_ids: poloIds });
         }}
-        className="space-y-4"
+        className="space-y-4 pt-2"
       >
-        <div>
-          <Label htmlFor="name">Nome</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="text-xs font-semibold">
+            Nome do Curso <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="name"
+            placeholder="Ex: Licenciatura em Pedagogia"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="h-9"
+          />
         </div>
-        <div>
-          <Label htmlFor="code">Código</Label>
-          <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} />
+
+        <div className="space-y-1.5">
+          <Label htmlFor="code" className="text-xs font-semibold">
+            Código / Sigla <span className="text-muted-foreground font-normal">(opcional)</span>
+          </Label>
+          <Input
+            id="code"
+            placeholder="Ex: PED-2026"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="h-9"
+          />
         </div>
-        <div>
-          <Label>Polos onde este curso é oferecido</Label>
-          <div className="mt-2 space-y-2 rounded-md border p-3 max-h-48 overflow-auto">
-            {polos.length === 0 && (
-              <p className="text-xs text-muted-foreground">Nenhum polo cadastrado ainda.</p>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold">Polos onde o curso é oferecido</Label>
+            {polos.length > 3 && (
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={selectAllPolos}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Todos
+                </button>
+                <span className="text-muted-foreground">•</span>
+                <button
+                  type="button"
+                  onClick={clearAllPolos}
+                  className="text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Limpar
+                </button>
+              </div>
             )}
-            {polos.map((p) => (
-              <label key={p.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={poloIds.includes(p.id)}
-                  onCheckedChange={(v) =>
-                    setPoloIds((prev) => (v ? [...prev, p.id] : prev.filter((x) => x !== p.id)))
-                  }
-                />
-                {p.name}
-              </label>
-            ))}
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 max-h-48 overflow-y-auto space-y-2">
+            {polos.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Nenhum polo cadastrado na instituição ainda.
+              </p>
+            ) : (
+              polos.map((p) => {
+                const isChecked = poloIds.includes(p.id);
+                return (
+                  <label
+                    key={p.id}
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-accent/50 cursor-pointer transition-colors text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(v) =>
+                          setPoloIds((prev) => (v ? [...prev, p.id] : prev.filter((x) => x !== p.id)))
+                        }
+                      />
+                      <span className="font-medium text-foreground">{p.name}</span>
+                    </div>
+                    {isChecked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </label>
+                );
+              })
+            )}
           </div>
         </div>
-        <DialogFooter>
-          <Button type="submit" disabled={!name || pending}>
-            {pending ? "Salvando..." : "Salvar"}
+
+        <DialogFooter className="pt-2">
+          <Button type="submit" disabled={!name.trim() || pending} className="w-full sm:w-auto">
+            {pending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+              </>
+            ) : (
+              "Salvar Curso"
+            )}
           </Button>
         </DialogFooter>
       </form>

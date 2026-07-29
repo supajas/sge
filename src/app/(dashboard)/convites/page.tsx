@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Copy, MessageCircle, Trash2, Pencil } from "lucide-react";
+import {
+  Plus,
+  Copy,
+  MessageCircle,
+  Trash2,
+  Pencil,
+  Mail,
+  UserCheck,
+  Clock,
+  Loader2,
+  Inbox,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { PageBody, PageHeader } from "@/components/page";
@@ -10,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -32,7 +44,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ROLE_LABELS, type AppRole } from "@/lib/roles";
 import { toast } from "sonner";
 import {
@@ -67,11 +81,11 @@ function getInviteLink(code: string) {
 
 function copyInviteLink(code: string) {
   navigator.clipboard.writeText(getInviteLink(code));
-  toast.success("Link copiado");
+  setTimeout(() => toast.success("Link copiado para a área de transferência."), 0);
 }
 
 function shareWhatsApp(code: string, institutionName?: string) {
-  const msg = `Você foi convidado para ${institutionName ?? "a plataforma"}. Aceite: ${getInviteLink(code)}`;
+  const msg = `Você foi convidado para ${institutionName ?? "a plataforma"}. Aceite pelo link: ${getInviteLink(code)}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
 }
 
@@ -94,9 +108,9 @@ export default function ConvitesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invites"] });
-      toast.success("Convite removido");
+      setTimeout(() => toast.success("Convite removido com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const update = useMutation({
@@ -107,7 +121,7 @@ export default function ConvitesPage() {
       expires_in_days: number;
       polo_ids: string[];
     }) => {
-      if (!tenant.active) throw new Error("No active institution");
+      if (!tenant.active) throw new Error("Sem instituição ativa");
       return updateInviteAction({
         id: v.id,
         institution_id: tenant.active.institutionId,
@@ -120,9 +134,9 @@ export default function ConvitesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invites"] });
       setEditingInvite(null);
-      toast.success("Convite atualizado");
+      setTimeout(() => toast.success("Convite atualizado com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const create = useMutation({
@@ -132,7 +146,7 @@ export default function ConvitesPage() {
       expires_in_days: number;
       polo_ids: string[];
     }) => {
-      if (!tenant.active) throw new Error("No active institution");
+      if (!tenant.active) throw new Error("Sem instituição ativa");
       return createInviteAction({
         institution_id: tenant.active.institutionId,
         email: v.email || null,
@@ -145,35 +159,47 @@ export default function ConvitesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invites"] });
       setCreateOpen(false);
-      toast.success("Convite criado");
+      setTimeout(() => toast.success("Convite gerado com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (!tenant.active) {
-    return <div className="p-6"><p>Carregando...</p></div>;
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48 rounded-md" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+    );
   }
+
+  // Métricas
+  const activeCount = data.filter(
+    (i) => !i.used_at && new Date(i.expires_at).getTime() >= Date.now()
+  ).length;
+  const usedCount = data.filter((i) => !!i.used_at).length;
 
   return (
     <>
       <PageHeader
-        title="Convites"
-        description="Convide colaboradores por email, link ou WhatsApp."
+        title="Convites de Acesso"
+        description="Convide colaboradores para a plataforma via e-mail, link direto ou WhatsApp."
         actions={
           <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-1 h-4 w-4" /> Novo convite
+              <Button size="sm" className="shadow-2xs">
+                <Plus className="mr-1.5 h-4 w-4" /> Novo Convite
               </Button>
             </DialogTrigger>
-            <InviteForm 
-              onSubmit={(v) => create.mutate(v)} 
-              pending={create.isPending} 
+            <InviteForm
+              onSubmit={(v) => create.mutate(v)}
+              pending={create.isPending}
             />
           </Dialog>
         }
       />
 
+      {/* DIÁLOGO DE EDIÇÃO */}
       <Dialog open={!!editingInvite} onOpenChange={(open) => !open && setEditingInvite(null)}>
         {editingInvite && (
           <InviteForm
@@ -181,7 +207,10 @@ export default function ConvitesPage() {
             initialData={{
               email: editingInvite.email ?? "",
               role: (editingInvite.role as AppRole) ?? "none",
-              expires_in_days: Math.max(1, Math.ceil((new Date(editingInvite.expires_at).getTime() - Date.now()) / 86400_000)),
+              expires_in_days: Math.max(
+                1,
+                Math.ceil((new Date(editingInvite.expires_at).getTime() - Date.now()) / 86400_000)
+              ),
               polo_ids: editingInvite.polo_ids ?? [],
             }}
             onSubmit={(v) => update.mutate({ ...v, id: editingInvite.id })}
@@ -192,32 +221,97 @@ export default function ConvitesPage() {
       </Dialog>
 
       <PageBody>
-        <div>
-          {/* Mobile View: Cards */}
-          <div className="md:hidden">
-            {isLoading ? (
-              <div className="py-8 text-center text-muted-foreground">Carregando...</div>
-            ) : data.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">Nenhum convite ainda.</div>
-            ) : (
-              <div className="space-y-4">
-                {data.map((i) => {
-                  const expired = new Date(i.expires_at).getTime() < Date.now();
-                  const used = !!i.used_at;
-                  const active = !expired && !used;
+        <div className="space-y-6">
+          {/* Métricas Rápidas */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Convites Ativos</p>
+                  <div className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : activeCount}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                  return (
-                    <div key={i.id} className="rounded-lg border bg-card p-4">
+            <Card className="border-border/60 bg-card/60 shadow-2xs">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+                  <UserCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Convites Aceitos</p>
+                  <div className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : usedCount}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-card/60 shadow-2xs sm:col-span-2 lg:col-span-1">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Total Gerados</p>
+                  <div className="text-xl font-bold tracking-tight text-foreground">
+                    {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : data.length}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* VISÃO MOBILE: CARDS */}
+          <div className="md:hidden space-y-3">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-36 w-full rounded-xl" />
+              ))
+            ) : data.length === 0 ? (
+              <EmptyInvitesState />
+            ) : (
+              data.map((i) => {
+                const expired = new Date(i.expires_at).getTime() < Date.now();
+                const used = !!i.used_at;
+                const active = !expired && !used;
+
+                return (
+                  <Card key={i.id} className="border-border/60 bg-card/80 shadow-2xs">
+                    <CardContent className="p-4">
                       <div className="flex items-start justify-between">
-                        <div className="font-mono text-sm">{i.code}</div>
+                        <div>
+                          <span className="font-mono text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                            {i.code}
+                          </span>
+                          <p className="mt-2 text-sm font-medium text-foreground">
+                            {i.email ?? "Qualquer e-mail"}
+                          </p>
+                        </div>
                         <InviteStatusBadge used={used} expired={expired} />
                       </div>
-                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                        <p><span className="font-medium text-foreground">Email:</span> {i.email ?? "Qualquer um"}</p>
-                        <p><span className="font-medium text-foreground">Perfil:</span> {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}</p>
-                        <p><span className="font-medium text-foreground">Expira:</span> {new Date(i.expires_at).toLocaleDateString("pt-BR")}</p>
+
+                      <div className="mt-3 space-y-1 text-xs text-muted-foreground border-t border-border/40 pt-2">
+                        <div className="flex justify-between">
+                          <span>Perfil de Acesso:</span>
+                          <span className="font-medium text-foreground">
+                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Expira em:</span>
+                          <span className="font-medium text-foreground">
+                            {new Date(i.expires_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+
+                      <div className="mt-4 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/40 pt-3">
                         <InviteActions
                           invite={i}
                           active={active}
@@ -227,37 +321,42 @@ export default function ConvitesPage() {
                           iconOnly={false}
                         />
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
 
-          {/* Desktop View: Table */}
-          <div className="hidden rounded-lg border bg-card md:block">
+          {/* VISÃO DESKTOP: TABELA */}
+          <div className="hidden rounded-xl border border-border/60 bg-card/60 shadow-2xs overflow-hidden md:block">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Perfil</TableHead>
-                  <TableHead>Expira</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-40 text-right">Ações</TableHead>
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="font-semibold text-foreground">Código</TableHead>
+                  <TableHead className="font-semibold text-foreground">E-mail Destinatário</TableHead>
+                  <TableHead className="font-semibold text-foreground">Perfil Atribuído</TableHead>
+                  <TableHead className="font-semibold text-foreground">Validade</TableHead>
+                  <TableHead className="font-semibold text-foreground">Status</TableHead>
+                  <TableHead className="w-48 text-right font-semibold text-foreground">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-36" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-28 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                      Nenhum convite ainda.
+                    <TableCell colSpan={6} className="py-12">
+                      <EmptyInvitesState />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -267,29 +366,37 @@ export default function ConvitesPage() {
                     const active = !expired && !used;
 
                     return (
-                      <TableRow key={i.id}>
-                        <TableCell className="font-mono text-xs">{i.code}</TableCell>
-                        <TableCell>{i.email ?? "—"}</TableCell>
+                      <TableRow key={i.id} className="hover:bg-accent/30 transition-colors">
+                        <TableCell className="font-mono text-xs font-semibold text-primary">
+                          <span className="bg-primary/10 px-2 py-1 rounded-md">
+                            {i.code}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-foreground font-medium">
+                          {i.email ? i.email : <span className="text-muted-foreground italic">Livre (Qualquer e-mail)</span>}
+                        </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}
+                          <Badge variant="secondary" className="font-normal bg-muted/60">
+                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A definir no aceite"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs text-muted-foreground">
                           {new Date(i.expires_at).toLocaleDateString("pt-BR")}
                         </TableCell>
                         <TableCell>
                           <InviteStatusBadge used={used} expired={expired} />
                         </TableCell>
                         <TableCell className="text-right">
-                          <InviteActions
-                            invite={i}
-                            active={active}
-                            tenantName={tenant.active?.name}
-                            onEdit={() => setEditingInvite(i)}
-                            onDelete={() => del.mutate(i.id)}
-                            iconOnly
-                          />
+                          <div className="flex items-center justify-end gap-1">
+                            <InviteActions
+                              invite={i}
+                              active={active}
+                              tenantName={tenant.active?.name}
+                              onEdit={() => setEditingInvite(i)}
+                              onDelete={() => del.mutate(i.id)}
+                              iconOnly
+                            />
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -304,12 +411,45 @@ export default function ConvitesPage() {
   );
 }
 
+{/* BADGE DE STATUS */}
 function InviteStatusBadge({ used, expired }: { used: boolean; expired: boolean }) {
-  if (used) return <Badge>Usado</Badge>;
-  if (expired) return <Badge variant="outline">Expirado</Badge>;
-  return <Badge variant="secondary">Ativo</Badge>;
+  if (used) {
+    return (
+      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+        Usado
+      </Badge>
+    );
+  }
+  if (expired) {
+    return (
+      <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
+        Expirado
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+      Ativo
+    </Badge>
+  );
 }
 
+{/* ESTADO VAZIO */}
+function EmptyInvitesState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 mb-3">
+        <Inbox className="h-6 w-6" />
+      </div>
+      <p className="text-sm font-medium text-foreground">Nenhum convite pendente</p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+        Gere links de convite para adicionar administradores e coordenadores à sua instituição.
+      </p>
+    </div>
+  );
+}
+
+{/* BOTOES DE AÇÃO */}
 function InviteActions({
   invite,
   active,
@@ -329,32 +469,35 @@ function InviteActions({
     <>
       <Button
         size={iconOnly ? "icon" : "sm"}
-        variant={iconOnly ? "ghost" : "outline"}
-        title="Copiar link"
+        variant="ghost"
+        className={iconOnly ? "h-8 w-8 text-muted-foreground hover:text-foreground" : "h-8 text-xs hover:bg-accent"}
+        title="Copiar Link"
         onClick={() => copyInviteLink(invite.code)}
       >
-        <Copy className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+        <Copy className={iconOnly ? "h-3.5 w-3.5" : "mr-1.5 h-3.5 w-3.5"} />
         {!iconOnly && "Copiar"}
       </Button>
 
       <Button
         size={iconOnly ? "icon" : "sm"}
-        variant={iconOnly ? "ghost" : "outline"}
-        title="WhatsApp"
+        variant="ghost"
+        className={iconOnly ? "h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400" : "h-8 text-xs text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"}
+        title="Compartilhar no WhatsApp"
         onClick={() => shareWhatsApp(invite.code, tenantName)}
       >
-        <MessageCircle className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+        <MessageCircle className={iconOnly ? "h-3.5 w-3.5" : "mr-1.5 h-3.5 w-3.5"} />
         {!iconOnly && "WhatsApp"}
       </Button>
 
       {active && (
         <Button
           size={iconOnly ? "icon" : "sm"}
-          variant={iconOnly ? "ghost" : "outline"}
-          title="Editar"
+          variant="ghost"
+          className={iconOnly ? "h-8 w-8 text-muted-foreground hover:text-foreground" : "h-8 text-xs hover:bg-accent"}
+          title="Editar Convite"
           onClick={onEdit}
         >
-          <Pencil className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+          <Pencil className={iconOnly ? "h-3.5 w-3.5" : "mr-1.5 h-3.5 w-3.5"} />
           {!iconOnly && "Editar"}
         </Button>
       )}
@@ -363,23 +506,33 @@ function InviteActions({
         <AlertDialogTrigger asChild>
           <Button
             size={iconOnly ? "icon" : "sm"}
-            variant={iconOnly ? "ghost" : "destructive"}
-            title="Excluir"
+            variant="ghost"
+            className={
+              iconOnly
+                ? "h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                : "h-8 text-xs text-destructive hover:bg-destructive/10"
+            }
+            title="Excluir Convite"
           >
-            <Trash2 className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+            <Trash2 className={iconOnly ? "h-3.5 w-3.5" : "mr-1.5 h-3.5 w-3.5"} />
             {!iconOnly && "Excluir"}
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogTitle>Excluir Convite</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir o convite de código &quot;{invite.code}&quot;?
+              Tem certeza que deseja excluir o convite <strong className="text-foreground">{invite.code}</strong>? Esta ação desativará o link de acesso imediatamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete}>Excluir</AlertDialogAction>
+            <AlertDialogAction
+              onClick={onDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir Convite
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -387,6 +540,7 @@ function InviteActions({
   );
 }
 
+{/* FORMULÁRIO */}
 function InviteForm({
   initialData,
   isEditing,
@@ -433,84 +587,111 @@ function InviteForm({
   const canSubmit = !showPoloPicker || poloIds.length > 0;
 
   return (
-    <DialogContent>
+    <DialogContent className="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>{isEditing ? "Editar convite" : "Novo convite"}</DialogTitle>
+        <DialogTitle>{isEditing ? "Editar Convite" : "Gerar Novo Convite"}</DialogTitle>
+        <DialogDescription>
+          Configure os acessos e a validade do convite antes de compartilhá-lo.
+        </DialogDescription>
       </DialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!canSubmit) return;
-          onSubmit({ email, role, expires_in_days: days, polo_ids: showPoloPicker ? poloIds : [] });
+          onSubmit({ email, role, expires_in_days: days, polo_ids: poloIds });
         }}
-        className="space-y-4"
+        className="space-y-4 pt-2"
       >
-        <div>
-          <Label htmlFor="email">Email (opcional)</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-xs font-semibold">
+            E-mail do Destinatário <span className="text-muted-foreground font-normal">(Opcional)</span>
+          </Label>
           <Input
             id="email"
             type="email"
+            placeholder="Ex: colaborador@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Deixe em branco para link aberto"
+            className="h-9"
           />
         </div>
-        <div>
-          <Label>Perfil</Label>
-          <Select value={role} onValueChange={(v) => setRole(v as AppRole | "none")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Deixar o convidado escolher</SelectItem>
-              <SelectItem value="admin">Administrador</SelectItem>
-              <SelectItem value="coord_geral">Coordenador Geral</SelectItem>
-              <SelectItem value="coord_polo">Coordenador de Polo</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Se o perfil não for definido, o convidado poderá escolher no momento do aceite.
-          </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Perfil Inicial</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as AppRole | "none")}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">A escolher no aceite</SelectItem>
+                <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
+                <SelectItem value="coord_geral">{ROLE_LABELS.coord_geral}</SelectItem>
+                <SelectItem value="coord_polo">{ROLE_LABELS.coord_polo}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="days" className="text-xs font-semibold">Validade (dias)</Label>
+            <Input
+              id="days"
+              type="number"
+              min={1}
+              max={30}
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="h-9"
+            />
+          </div>
         </div>
-        
+
         {showPoloPicker && (
-          <div>
-            <Label>Polos</Label>
-            <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded-md border p-3">
+          <div className="space-y-2 border-t border-border/40 pt-3">
+            <Label className="text-xs font-semibold">
+              Vincular aos Polos <span className="text-destructive">*</span>
+            </Label>
+            <div className="max-h-36 overflow-y-auto space-y-2 border border-border/60 rounded-md p-2.5 bg-muted/20">
               {polos.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nenhum polo cadastrado.</p>
               ) : (
-                polos.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2 text-sm">
+                polos.map((polo) => (
+                  <div key={polo.id} className="flex items-center space-x-2">
                     <Checkbox
-                      checked={poloIds.includes(p.id)}
-                      onCheckedChange={(v) =>
-                        setPoloIds((cur) => (v ? [...cur, p.id] : cur.filter((x) => x !== p.id)))
-                      }
+                      id={`polo-${polo.id}`}
+                      checked={poloIds.includes(polo.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setPoloIds([...poloIds, polo.id]);
+                        } else {
+                          setPoloIds(poloIds.filter((id) => id !== polo.id));
+                        }
+                      }}
                     />
-                    {p.name}
-                  </label>
+                    <label
+                      htmlFor={`polo-${polo.id}`}
+                      className="text-xs font-medium text-foreground cursor-pointer leading-none"
+                    >
+                      {polo.name}
+                    </label>
+                  </div>
                 ))
               )}
             </div>
-            {poloIds.length === 0 && <p className="mt-1 text-xs text-destructive">Selecione ao menos um polo para este perfil.</p>}
           </div>
         )}
 
-        <div>
-          <Label htmlFor="days">Validade (dias)</Label>
-          <Input
-            id="days"
-            type="number"
-            min={1}
-            max={90}
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-          />
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={pending || !canSubmit}>
-            {pending ? (isEditing ? "Salvando..." : "Criando...") : (isEditing ? "Salvar alterações" : "Criar convite")}
+        <DialogFooter className="pt-2">
+          <Button type="submit" disabled={!canSubmit || pending} className="w-full sm:w-auto">
+            {pending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+              </>
+            ) : isEditing ? (
+              "Salvar Alterações"
+            ) : (
+              "Gerar Convite"
+            )}
           </Button>
         </DialogFooter>
       </form>

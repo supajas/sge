@@ -20,7 +20,13 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <Toaster richColors position="top-right" />
+      <Toaster 
+        richColors 
+        position="top-right" 
+        toastOptions={{
+          className: "transition-all duration-300 ease-in-out",
+        }}
+      />
     </QueryClientProvider>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, GripVertical, Star, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -46,14 +46,20 @@ export function TemplateCard({
   const [name, setName] = useState(template.name);
   const [fields, setFields] = useState(template.fields);
 
+  // 🚀 SINCRONIZAÇÃO: Atualiza o estado local quando os dados do servidor mudam
+  useEffect(() => {
+    setName(template.name);
+    setFields(template.fields);
+  }, [template]);
+
   const renameTpl = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("grade_templates").update({ name }).eq("id", template.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["grade_templates"] });
       toast.success("Nome atualizado");
+      qc.invalidateQueries({ queryKey: ["grade_templates"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -71,17 +77,23 @@ export function TemplateCard({
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["grade_templates"] }),
+    onSuccess: () => {
+      toast.success("Campo adicionado com sucesso!");
+      qc.invalidateQueries({ queryKey: ["grade_templates"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const updField = useMutation({
     mutationFn: async (f: Partial<Field> & { id: string }) => {
-      const { id, ...patch } = f;
-      const { error } = await supabase.from("grade_template_fields").update(patch).eq("id", id);
+      const id = f.id;
+      const { error } = await supabase.from("grade_template_fields").update(f).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["grade_templates"] }),
+    onSuccess: () => {
+      toast.success("Campo atualizado com sucesso!");
+      qc.invalidateQueries({ queryKey: ["grade_templates"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -90,7 +102,10 @@ export function TemplateCard({
       const { error } = await supabase.from("grade_template_fields").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["grade_templates"] }),
+    onSuccess: () => {
+      toast.success("Campo excluído com sucesso!");
+      qc.invalidateQueries({ queryKey: ["grade_templates"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -100,10 +115,9 @@ export function TemplateCard({
       await qc.cancelQueries({ queryKey: ["grade_templates"] });
       const previousTemplates = qc.getQueryData<Template[]>(["grade_templates"]);
 
-      // Optimistically update the UI
       const newFields = [...fields];
-      const fromIndex = newFields.findIndex(f => f.id === vars.field_id);
-      const toIndex = vars.direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+      const fromIndex = newFields.findIndex((f) => f.id === vars.field_id);
+      const toIndex = vars.direction === "up" ? fromIndex - 1 : fromIndex + 1;
       const [movedItem] = newFields.splice(fromIndex, 1);
       newFields.splice(toIndex, 0, movedItem);
       setFields(newFields);

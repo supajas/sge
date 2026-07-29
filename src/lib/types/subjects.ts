@@ -16,3 +16,11 @@ export type SubjectInput = {
   workload_hours?: number | null;
   course_id: string;
 };
+
+export interface Subject {
+  id: string;
+  name: string;
+  course_id: string;
+  workload_hours?: number | null;
+  is_active: boolean; // Novo campo
+}

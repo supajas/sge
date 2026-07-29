@@ -138,3 +138,8 @@
     transform: translateY(0);
   }
 }
+
+/* Previne que a barra de rolagem cause Layout Shift ao aparecer/sumir */
+html {
+  scrollbar-gutter: stable;
+}

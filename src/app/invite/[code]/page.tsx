@@ -77,12 +77,12 @@ export default function InvitePage({ params }: { params: { code: string } }) {
         }
         
         localStorage.setItem("active_institution_id", data.institutionId);
-        toast.success("Convite aceito! Bem-vindo(a).");
+        setTimeout(() => toast.success("Convite aceito! Bem-vindo(a)."), 0);
         window.location.href = "/dashboard";
       }
     },
     onError: (e) => {
-      toast.error(e.message);
+      setTimeout(() => toast.error(e.message), 0);
     }
   });
 

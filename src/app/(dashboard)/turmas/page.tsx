@@ -38,7 +38,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -61,14 +60,23 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Turma = { id: string; name: string; period: string | null; course_id: string; polo_id: string };
+type Period = { id: string; name: string; is_active: boolean };
+type Turma = {
+  id: string;
+  name: string;
+  period_id: string | null;
+  course_id: string;
+  polo_id: string;
+  periods?: { name: string } | null;
+};
 type CourseWithPolos = { id: string; name: string; polo_ids: string[] };
 type Polo = { id: string; name: string };
 
 type GroupedTurma = {
   groupKey: string;
   course_id: string;
-  period: string | null;
+  period_id: string | null;
+  period_name: string;
   polo_ids: string[];
   turma_ids: string[];
 };
@@ -81,6 +89,7 @@ export default function TurmasPage() {
 
   const canEdit = tenant.active ? isAdminLike(tenant.active.role) : false;
 
+  // 1. Buscar Cursos com seus Polos
   const { data: courses = [] } = useQuery({
     queryKey: ["courses-with-polos", tenant.active?.institutionId],
     queryFn: async () => {
@@ -100,6 +109,7 @@ export default function TurmasPage() {
     enabled: !!tenant.active?.institutionId,
   });
 
+  // 2. Buscar Polos
   const { data: polos = [] } = useQuery({
     queryKey: ["polos", tenant.active?.institutionId],
     queryFn: async () => {
@@ -115,30 +125,51 @@ export default function TurmasPage() {
     enabled: !!tenant.active?.institutionId,
   });
 
+  // 3. Buscar Períodos Letivos cadastrados
+  const { data: periods = [] } = useQuery({
+    queryKey: ["periods", tenant.active?.institutionId],
+    queryFn: async () => {
+      if (!tenant.active) return [];
+      const { data, error } = await supabase
+        .from("periods")
+        .select("id, name, is_active")
+        .eq("institution_id", tenant.active.institutionId)
+        .order("name", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Period[];
+    },
+    enabled: !!tenant.active?.institutionId,
+  });
+
+  // 4. Buscar Turmas (Classes) vinculadas a Periods
   const { data: turmasRaw = [], isLoading } = useQuery({
     queryKey: ["classes", tenant.active?.institutionId],
     queryFn: async () => {
       if (!tenant.active) return [];
       const { data, error } = await supabase
         .from("classes")
-        .select("id, name, period, course_id, polo_id")
+        .select("id, name, period_id, course_id, polo_id, periods(name)")
         .eq("institution_id", tenant.active.institutionId)
         .order("name");
       if (error) throw error;
-      return data as Turma[];
+      return (data ?? []) as unknown as Turma[];
     },
     enabled: !!tenant.active?.institutionId,
   });
 
+  // Agrupamento por Curso e Período
   const groupedTurmas = useMemo(() => {
     const groups = new Map<string, GroupedTurma>();
     turmasRaw.forEach((turma) => {
-      const key = `${turma.course_id}-${turma.period}`;
+      const periodName = turma.periods?.name ?? "Sem Período";
+      const key = `${turma.course_id}-${turma.period_id ?? "none"}`;
+      
       if (!groups.has(key)) {
         groups.set(key, {
           groupKey: key,
           course_id: turma.course_id,
-          period: turma.period,
+          period_id: turma.period_id,
+          period_name: periodName,
           polo_ids: [],
           turma_ids: [],
         });
@@ -150,35 +181,60 @@ export default function TurmasPage() {
     return Array.from(groups.values());
   }, [turmasRaw]);
 
+  const nameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    courses.forEach((c) => m.set(c.id, c.name));
+    polos.forEach((p) => m.set(p.id, p.name));
+    return m;
+  }, [courses, polos]);
+
+  // Mutation para Salvar / Editar
   const save = useMutation({
-    mutationFn: async (v: { period: string; course_id: string; polo_ids: string[] }) => {
+    mutationFn: async (v: { period_id: string; course_id: string; polo_ids: string[] }) => {
       if (!tenant.active) throw new Error("Sem instituição ativa");
 
       const courseName = courses.find((c) => c.id === v.course_id)?.name ?? "Curso";
-      const generatedName = `${courseName} - ${v.period || "Período Único"}`;
+      const periodObj = periods.find((p) => p.id === v.period_id);
+      const periodName = periodObj ? periodObj.name : "Período Único";
 
       const existingTurmasInGroup = editing ? turmasRaw.filter((t) => editing.turma_ids.includes(t.id)) : [];
 
       const toDelete = existingTurmasInGroup.filter((et) => !v.polo_ids.includes(et.polo_id));
+      const toKeep = existingTurmasInGroup.filter((et) => v.polo_ids.includes(et.polo_id));
       const toAdd = v.polo_ids.filter((pid) => !existingTurmasInGroup.some((et) => et.polo_id === pid));
 
       const promises = [];
 
+      // 1. Remover turmas de polos desmarcados
       if (toDelete.length > 0) {
         promises.push(supabase.from("classes").delete().in("id", toDelete.map((t) => t.id)));
       }
 
+      // 2. Inserir turmas para novos polos marcados
       if (toAdd.length > 0) {
+        const inserts = toAdd.map((poloId) => {
+          const poloName = nameMap.get(poloId) ?? "Polo";
+          const generatedName = `${courseName} - ${poloName} (${periodName})`;
+          return {
+            name: generatedName,
+            period_id: v.period_id || null,
+            course_id: v.course_id,
+            polo_id: poloId,
+            institution_id: tenant.active!.institutionId,
+          };
+        });
+        promises.push(supabase.from("classes").insert(inserts));
+      }
+
+      // 3. Atualizar o nome e o período das turmas mantidas
+      for (const turma of toKeep) {
+        const poloName = nameMap.get(turma.polo_id) ?? "Polo";
+        const generatedName = `${courseName} - ${poloName} (${periodName})`;
         promises.push(
-          supabase.from("classes").insert(
-            toAdd.map((poloId) => ({
-              name: generatedName,
-              period: v.period || null,
-              course_id: v.course_id,
-              polo_id: poloId,
-              institution_id: tenant.active!.institutionId,
-            }))
-          )
+          supabase
+            .from("classes")
+            .update({ name: generatedName, period_id: v.period_id || null })
+            .eq("id", turma.id)
         );
       }
 
@@ -189,9 +245,11 @@ export default function TurmasPage() {
       qc.invalidateQueries({ queryKey: ["classes-basic"] });
       setFormOpen(false);
       setEditing(null);
-      toast.success(editing ? "Grupo de turmas atualizado com sucesso." : "Grupo de turmas cadastrado com sucesso.");
+      setTimeout(() => {
+        toast.success(editing ? "Grupo de turmas e nomes atualizados com sucesso." : "Grupo de turmas cadastrado com sucesso.");
+      }, 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const del = useMutation({
@@ -202,17 +260,12 @@ export default function TurmasPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["classes"] });
       qc.invalidateQueries({ queryKey: ["classes-basic"] });
-      toast.success("Grupo de turmas excluído com sucesso.");
+      setTimeout(() => {
+        toast.success("Grupo de turmas excluído com sucesso.");
+      }, 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
-
-  const nameMap = useMemo(() => {
-    const m = new Map<string, string>();
-    courses.forEach((c) => m.set(c.id, c.name));
-    polos.forEach((p) => m.set(p.id, p.name));
-    return m;
-  }, [courses, polos]);
 
   if (!tenant.active) {
     return (
@@ -247,6 +300,7 @@ export default function TurmasPage() {
                 editing={editing}
                 courses={courses}
                 polos={polos}
+                periods={periods}
                 onSubmit={(v) => save.mutate(v)}
                 pending={save.isPending}
               />
@@ -265,9 +319,9 @@ export default function TurmasPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Grupos de Turmas</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : groupedTurmas.length}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -279,9 +333,9 @@ export default function TurmasPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Turmas em Polos</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : turmasRaw.length}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -305,7 +359,7 @@ export default function TurmasPage() {
                           {nameMap.get(t.course_id) ?? "—"}
                         </h4>
                         <Badge variant="outline" className="font-mono text-[11px] shrink-0">
-                          {t.period ?? "—"}
+                          {t.period_name}
                         </Badge>
                       </div>
 
@@ -332,7 +386,7 @@ export default function TurmasPage() {
                         </Button>
                         <DeleteTurmaGroupDialog
                           courseName={nameMap.get(t.course_id) ?? "—"}
-                          period={t.period}
+                          periodName={t.period_name}
                           onConfirm={() => del.mutate(t.turma_ids)}
                         />
                       </div>
@@ -382,11 +436,11 @@ export default function TurmasPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground/70" />
-                          <span>{t.period ?? "—"}</span>
+                          <span>{t.period_name}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <PoloBadges poloIds={t.polo_ids} nameMap={nameMap} maxVisible={3} />
+                        <PoloBadges poloIds={t.polo_ids} nameMap={nameMap} />
                       </TableCell>
                       {canEdit && (
                         <TableCell className="text-right">
@@ -405,7 +459,7 @@ export default function TurmasPage() {
                             </Button>
                             <DeleteTurmaGroupDialog
                               courseName={nameMap.get(t.course_id) ?? "—"}
-                              period={t.period}
+                              periodName={t.period_name}
                               onConfirm={() => del.mutate(t.turma_ids)}
                               isIconOnly
                             />
@@ -424,35 +478,31 @@ export default function TurmasPage() {
   );
 }
 
-{/* COMPONENTE AUXILIAR PARA BADGES DE POLOS COM SUPORTE A NOME MAP E TRUNCAGEM */}
+{/* COMPONENTE AUXILIAR PARA BADGES DE POLOS ORDENADOS ALFABETICAMENTE */}
 function PoloBadges({
   poloIds,
   nameMap,
-  maxVisible,
 }: {
   poloIds: string[];
   nameMap: Map<string, string>;
-  maxVisible?: number;
 }) {
   if (poloIds.length === 0) {
     return <span className="text-xs text-muted-foreground">Nenhum polo atrelado</span>;
   }
 
-  const visibleIds = maxVisible ? poloIds.slice(0, maxVisible) : poloIds;
-  const remainingCount = maxVisible ? poloIds.length - maxVisible : 0;
+  const sortedPoloIds = [...poloIds].sort((a, b) => {
+    const nameA = nameMap.get(a) ?? "";
+    const nameB = nameMap.get(b) ?? "";
+    return nameA.localeCompare(nameB);
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {visibleIds.map((pid) => (
+      {sortedPoloIds.map((pid) => (
         <Badge key={pid} variant="secondary" className="bg-muted/80 text-foreground font-normal text-[11px] border border-border/40">
           {nameMap.get(pid) ?? "?"}
         </Badge>
       ))}
-      {remainingCount > 0 && (
-        <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground">
-          +{remainingCount} polo{remainingCount > 1 ? "s" : ""}
-        </Badge>
-      )}
     </div>
   );
 }
@@ -466,7 +516,7 @@ function EmptyTurmasState() {
       </div>
       <p className="text-sm font-medium text-foreground">Nenhuma turma cadastrada</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-        Cadastre um novo grupo de turmas associando um curso, período e seus respectivos polos.
+        Cadastre um novo grupo de turmas associando um curso, período letivo e seus respectivos polos.
       </p>
     </div>
   );
@@ -475,12 +525,12 @@ function EmptyTurmasState() {
 {/* DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO DE GRUPO */}
 function DeleteTurmaGroupDialog({
   courseName,
-  period,
+  periodName,
   onConfirm,
   isIconOnly = false,
 }: {
   courseName: string;
-  period: string | null;
+  periodName: string;
   onConfirm: () => void;
   isIconOnly?: boolean;
 }) {
@@ -502,7 +552,7 @@ function DeleteTurmaGroupDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir Grupo de Turmas</AlertDialogTitle>
           <AlertDialogDescription>
-            Tem certeza que deseja excluir o grupo de turmas do curso <strong className="text-foreground">{courseName}</strong> para o período <strong className="text-foreground">{period ?? "Único"}</strong>? Todas as instâncias atreladas nos polos serão removidas.
+            Tem certeza que deseja excluir o grupo de turmas do curso <strong className="text-foreground">{courseName}</strong> para o período <strong className="text-foreground">{periodName}</strong>? Todas as instâncias atreladas nos polos serão removidas.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -524,26 +574,20 @@ function TurmaForm({
   editing,
   courses,
   polos,
+  periods,
   onSubmit,
   pending,
 }: {
   editing: GroupedTurma | null;
   courses: CourseWithPolos[];
   polos: Polo[];
-  onSubmit: (v: { period: string; course_id: string; polo_ids: string[] }) => void;
+  periods: Period[];
+  onSubmit: (v: { period_id: string; course_id: string; polo_ids: string[] }) => void;
   pending: boolean;
 }) {
-  const initialPeriod = editing?.period?.split(".") ?? [new Date().getFullYear().toString(), "1"];
-  const [year, setYear] = useState<string>(initialPeriod[0]);
-  const [semester, setSemester] = useState<string>(initialPeriod[1]);
+  const [periodId, setPeriodId] = useState<string>(editing?.period_id ?? "");
   const [courseId, setCourseId] = useState<string>(editing?.course_id ?? "");
   const [poloIds, setPoloIds] = useState<string[]>(editing?.polo_ids ?? []);
-
-  const years = useMemo(() => Array.from({ length: 31 }, (_, i) => (2020 + i).toString()), []);
-  const semesters = [
-    { value: "1", label: "Período 1" },
-    { value: "2", label: "Período 2" },
-  ];
 
   const validPolosForCourse = useMemo(() => {
     if (!courseId) return [];
@@ -560,14 +604,13 @@ function TurmaForm({
       <DialogHeader>
         <DialogTitle>{editing ? "Editar Grupo de Turmas" : "Novo Grupo de Turmas"}</DialogTitle>
         <DialogDescription>
-          Selecione o curso, o período letivo e os polos em que as turmas serão abertas.
+          Selecione o curso, o período letivo cadastrado e os polos em que as turmas serão abertas.
         </DialogDescription>
       </DialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const period = `${year}.${semester}`;
-          onSubmit({ period, course_id: courseId, polo_ids: poloIds });
+          onSubmit({ period_id: periodId, course_id: courseId, polo_ids: poloIds });
         }}
         className="space-y-4 pt-2"
       >
@@ -589,38 +632,22 @@ function TurmaForm({
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Ano</Label>
-            <Select value={year} onValueChange={setYear} disabled={!!editing}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y} value={y}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Período</Label>
-            <Select value={semester} onValueChange={setSemester} disabled={!!editing}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {semesters.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">
+            Período Letivo <span className="text-destructive">*</span>
+          </Label>
+          <Select value={periodId} onValueChange={setPeriodId} disabled={!!editing}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Selecione o período..." />
+            </SelectTrigger>
+            <SelectContent>
+              {periods.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name} {p.is_active ? "(Ativo)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -686,7 +713,7 @@ function TurmaForm({
         <DialogFooter className="pt-2">
           <Button
             type="submit"
-            disabled={!courseId || poloIds.length === 0 || pending}
+            disabled={!courseId || !periodId || poloIds.length === 0 || pending}
             className="w-full sm:w-auto"
           >
             {pending ? (

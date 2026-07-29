@@ -62,6 +62,18 @@ export async function redeemInviteAction(input: RedeemInput) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
+  // Instancia o Supabase Admin para ignorar o RLS durante a atribuição de permissões
+  const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+  const supabaseAdmin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+      },
+    }
+  );
+
   const code = input.code.trim().toUpperCase();
 
   const { data: inv, error } = await supabase
@@ -98,19 +110,6 @@ export async function redeemInviteAction(input: RedeemInput) {
   }
 
   if (finalPolos.length) {
-    // This validation must run with admin privileges to bypass the user's RLS,
-    // as the user is not yet a member of the institution at this point.
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          persistSession: false, // Desativa persistência de sessão para chamadas admin
-        },
-      }
-    );
-
     const { data: polosOk } = await supabaseAdmin
       .from("polos")
       .select("id")
@@ -122,7 +121,8 @@ export async function redeemInviteAction(input: RedeemInput) {
     }
   }
 
-  const { data: existing } = await supabase
+  // Usando supabaseAdmin para criar/atualizar a membership do usuário
+  const { data: existing } = await supabaseAdmin
     .from("memberships")
     .select("id")
     .eq("user_id", user.id)
@@ -131,7 +131,7 @@ export async function redeemInviteAction(input: RedeemInput) {
 
   let membershipId = existing?.id ?? null;
   if (!membershipId) {
-    const { data: created, error: memErr } = await supabase
+    const { data: created, error: memErr } = await supabaseAdmin
       .from("memberships")
       .insert({ user_id: user.id, institution_id: inv.institution_id, role: finalRole })
       .select("id")
@@ -139,9 +139,8 @@ export async function redeemInviteAction(input: RedeemInput) {
     if (memErr || !created) throw new Error(memErr?.message ?? "Falha ao criar vínculo");
     membershipId = created.id;
   } else {
-    // If membership already exists, update the role if the invite specifies one
     if (finalRole) {
-      const { error: updateMemError } = await supabase
+      const { error: updateMemError } = await supabaseAdmin
         .from("memberships")
         .update({ role: finalRole })
         .eq("id", membershipId);
@@ -150,7 +149,7 @@ export async function redeemInviteAction(input: RedeemInput) {
   }
 
   if (inv.course_ids?.length) {
-    await supabase.from("coordinator_courses").upsert(
+    await supabaseAdmin.from("coordinator_courses").upsert(
       (inv.course_ids as string[]).map((cid: string) => ({
         membership_id: membershipId!,
         course_id: cid,
@@ -161,9 +160,9 @@ export async function redeemInviteAction(input: RedeemInput) {
 
   console.log("RedeemInviteAction: finalPolos before upsert/delete:", finalPolos);
 
-  // Always upsert coordinator_polos if finalPolos are provided
+  // Alterado para supabaseAdmin para evitar o erro de Row-Level Security em coordinator_polos
   if (finalPolos.length) {
-    const { error: upsertError } = await supabase.from("coordinator_polos").upsert(
+    const { error: upsertError } = await supabaseAdmin.from("coordinator_polos").upsert(
       finalPolos.map((pid: string) => ({
         membership_id: membershipId!,
         polo_id: pid,
@@ -176,8 +175,7 @@ export async function redeemInviteAction(input: RedeemInput) {
     }
     console.log("RedeemInviteAction: coordinator_polos upsert successful for membershipId:", membershipId, "polos:", finalPolos);
   } else {
-    // If no polos are specified in the invite, ensure any existing polo associations for this membership are removed
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from("coordinator_polos")
       .delete()
       .eq("membership_id", membershipId!);
@@ -189,10 +187,10 @@ export async function redeemInviteAction(input: RedeemInput) {
   }
 
   if (inv.single_use) {
-    await supabase.from("invites").update({ used_at: new Date().toISOString(), used_by: user.id }).eq("id", inv.id);
+    await supabaseAdmin.from("invites").update({ used_at: new Date().toISOString(), used_by: user.id }).eq("id", inv.id);
   }
 
-  await supabase.from("approval_history").insert({
+  await supabaseAdmin.from("approval_history").insert({
     institution_id: inv.institution_id,
     action: "invite_redeemed",
     actor_user_id: inv.created_by,
@@ -206,14 +204,13 @@ export async function redeemInviteAction(input: RedeemInput) {
 
   revalidatePath("/(dashboard)", "layout");
 
-  // Fetch the complete, updated memberships data to prime the client-side cache
+  // Na leitura final para a UI, mantemos o supabase normal já que o vínculo acabou de ser gravado
   const { data: membershipsData, error: membershipsError } = await supabase
     .from("memberships")
     .select("id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id)")
     .eq("user_id", user.id);
 
   if (membershipsError) {
-    // Even if this fails, the main action succeeded, so we proceed but log the error
     console.error("Failed to fetch updated memberships after invite redemption:", membershipsError);
     return { institutionId: inv.institution_id, updatedMemberships: null };
   }

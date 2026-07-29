@@ -37,7 +37,7 @@ export default function HomePage() {
     });
     if (error) {
       setSigning(false);
-      toast.error("Não foi possível iniciar o login");
+      setTimeout(() => toast.error("Não foi possível iniciar o login"), 0);
     }
   }
 

@@ -68,7 +68,6 @@ export function ExportDialog({
 
     const activeColumns = columns.filter((c) => selectedCols.includes(c.id));
 
-    // Normaliza os dados para conter apenas as colunas selecionadas
     const exportData = data.map((row) => {
       const filteredRow: Record<string, string | number | null> = {};
       activeColumns.forEach((col) => {

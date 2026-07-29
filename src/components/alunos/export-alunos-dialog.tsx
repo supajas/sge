@@ -47,7 +47,7 @@ export function ExportAlunosDialog({ students, classMap, onClose }: ExportAlunos
     const activeCols = EXPORT_COLUMNS.filter((col) => selectedCols[col.key]);
 
     if (activeCols.length === 0) {
-      toast.error("Selecione ao menos uma coluna para exportar.");
+      setTimeout(() => toast.error("Selecione ao menos uma coluna para exportar."), 0);
       return;
     }
 
@@ -77,7 +77,7 @@ export function ExportAlunosDialog({ students, classMap, onClose }: ExportAlunos
     link.click();
     document.body.removeChild(link);
 
-    toast.success("Exportação realizada com sucesso!");
+    setTimeout(() => toast.success("Exportação realizada com sucesso!"), 0);
     onClose();
   };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Course, Subject, SubjectInput } from "@/types/subjects";
+import { Course, Period, Subject, SubjectInput } from "@/lib/types/subjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,9 @@ import { toast } from "sonner";
 type Props = {
   editing: Subject | null;
   courses: Course[];
+  periods?: Period[];
+  defaultCourseId?: string;
+  defaultPeriodId?: string;
   onSubmitSingle: (value: SubjectInput) => void;
   onSubmitBulk: (values: SubjectInput[]) => void;
   pending: boolean;
@@ -33,6 +36,9 @@ type Props = {
 export function SubjectFormDialog({
   editing,
   courses,
+  periods = [],
+  defaultCourseId = "",
+  defaultPeriodId = "",
   onSubmitSingle,
   onSubmitBulk,
   pending,
@@ -44,10 +50,16 @@ export function SubjectFormDialog({
   const [workload, setWorkload] = useState<string>(
     editing?.workload_hours?.toString() ?? ""
   );
-  const [courseId, setCourseId] = useState<string>(editing?.course_id ?? "");
+  const [courseId, setCourseId] = useState<string>(
+    editing?.course_id ?? defaultCourseId
+  );
+  const [periodId, setPeriodId] = useState<string>(
+    editing?.period_id ?? defaultPeriodId
+  );
 
   // Form Bulk JSON
-  const [bulkCourseId, setBulkCourseId] = useState<string>("");
+  const [bulkCourseId, setBulkCourseId] = useState<string>(defaultCourseId);
+  const [bulkPeriodId, setBulkPeriodId] = useState<string>(defaultPeriodId);
   const [jsonText, setJsonText] = useState("");
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,9 +72,9 @@ export function SubjectFormDialog({
         const content = event.target?.result as string;
         JSON.parse(content); // Valida sintaxe JSON
         setJsonText(content);
-        toast.success("Arquivo JSON carregado com sucesso.");
-      } catch (err) {
-        toast.error("Arquivo JSON inválido.");
+        setTimeout(() => toast.success("Arquivo JSON carregado com sucesso."), 0);
+      } catch {
+        setTimeout(() => toast.error("Arquivo JSON inválido."), 0);
       }
     };
     reader.readAsText(file);
@@ -70,7 +82,7 @@ export function SubjectFormDialog({
 
   const handleBulkSubmit = () => {
     if (!bulkCourseId) {
-      toast.error("Selecione um curso para importar as disciplinas.");
+      setTimeout(() => toast.error("Selecione um curso para importar as disciplinas."), 0);
       return;
     }
 
@@ -78,7 +90,7 @@ export function SubjectFormDialog({
       const parsed = JSON.parse(jsonText);
       const items = Array.isArray(parsed) ? parsed : [parsed];
 
-      // Mapeia adicionando o course_id selecionado no Select
+      // Mapeia adicionando course_id e period_id selecionados
       const validItems: SubjectInput[] = items.map((item: any) => {
         if (!item.name) {
           throw new Error("O campo 'name' é obrigatório em todas as disciplinas.");
@@ -86,13 +98,14 @@ export function SubjectFormDialog({
         return {
           name: String(item.name),
           course_id: bulkCourseId,
+          period_id: bulkPeriodId || undefined,
           workload_hours: item.workload_hours ? Number(item.workload_hours) : null,
         };
       });
 
       onSubmitBulk(validItems);
     } catch (e: any) {
-      toast.error(`Erro no JSON: ${e.message || "Formato inválido"}`);
+      setTimeout(() => toast.error(`Erro no JSON: ${e.message || "Formato inválido"}`), 0);
     }
   };
 
@@ -108,9 +121,11 @@ export function SubjectFormDialog({
           onSubmit={(e) => {
             e.preventDefault();
             onSubmitSingle({
+              id: editing.id,
               name,
               workload_hours: workload ? Number(workload) : null,
               course_id: courseId,
+              period_id: periodId || undefined,
             });
           }}
           className="space-y-4"
@@ -119,7 +134,7 @@ export function SubjectFormDialog({
             <Label>Curso</Label>
             <Select value={courseId} onValueChange={setCourseId}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione..." />
+                <SelectValue placeholder="Selecione o curso..." />
               </SelectTrigger>
               <SelectContent>
                 {courses.map((c) => (
@@ -130,14 +145,33 @@ export function SubjectFormDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <div>
+            <Label>Período Letivo</Label>
+            <Select value={periodId} onValueChange={setPeriodId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o período..." />
+              </SelectTrigger>
+              <SelectContent>
+                {periods.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label htmlFor="name">Nome</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
+
           <div>
             <Label htmlFor="wl">Carga horária</Label>
             <Input id="wl" type="number" value={workload} onChange={(e) => setWorkload(e.target.value)} />
           </div>
+
           <DialogFooter>
             <Button type="submit" disabled={!name || !courseId || pending}>
               {pending ? "Salvando..." : "Salvar"}
@@ -146,7 +180,7 @@ export function SubjectFormDialog({
         </form>
       ) : (
         /* Formulário de Criação com Abas */
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "single" | "bulk")} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="single">Individual</TabsTrigger>
             <TabsTrigger value="bulk">Importar JSON</TabsTrigger>
@@ -161,6 +195,7 @@ export function SubjectFormDialog({
                   name,
                   workload_hours: workload ? Number(workload) : null,
                   course_id: courseId,
+                  period_id: periodId || undefined,
                 });
               }}
               className="space-y-4"
@@ -169,7 +204,7 @@ export function SubjectFormDialog({
                 <Label>Curso</Label>
                 <Select value={courseId} onValueChange={setCourseId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
+                    <SelectValue placeholder="Selecione o curso..." />
                   </SelectTrigger>
                   <SelectContent>
                     {courses.map((c) => (
@@ -180,14 +215,33 @@ export function SubjectFormDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div>
+                <Label>Período Letivo</Label>
+                <Select value={periodId} onValueChange={setPeriodId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o período..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periods.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div>
                 <Label htmlFor="name">Nome</Label>
                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
+
               <div>
                 <Label htmlFor="wl">Carga horária</Label>
                 <Input id="wl" type="number" value={workload} onChange={(e) => setWorkload(e.target.value)} />
               </div>
+
               <DialogFooter>
                 <Button type="submit" disabled={!name || !courseId || pending}>
                   {pending ? "Salvando..." : "Salvar"}
@@ -202,12 +256,28 @@ export function SubjectFormDialog({
               <Label>Curso de Destino</Label>
               <Select value={bulkCourseId} onValueChange={setBulkCourseId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o curso para estas disciplinas..." />
+                  <SelectValue placeholder="Selecione o curso..." />
                 </SelectTrigger>
                 <SelectContent>
                   {courses.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Período Letivo de Destino</Label>
+              <Select value={bulkPeriodId} onValueChange={setBulkPeriodId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o período..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

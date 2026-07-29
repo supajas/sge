@@ -121,10 +121,10 @@ export default function ColaboradoresPage() {
     mutationFn: updateMembershipAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberships-list"] });
-      toast.success("Colaborador atualizado com sucesso");
+      setTimeout(() => toast.success("Colaborador atualizado com sucesso"), 0);
       setEditing(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const remove = useMutation({
@@ -133,9 +133,9 @@ export default function ColaboradoresPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memberships-list"] });
-      toast.success("Colaborador removido com sucesso");
+      setTimeout(() => toast.success("Colaborador removido com sucesso"), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (!tenant.active) {

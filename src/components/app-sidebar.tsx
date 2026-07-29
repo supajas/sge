@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Mail, BookOpen, MapPin, Layers, GraduationCap,
   UserSquare2, Settings, ClipboardList, ListChecks, PencilRuler, Sparkles, ArrowRight,
-  ChevronRight
+  ChevronRight, Calendar
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
@@ -55,9 +55,15 @@ export function AppSidebar() {
     return pathname === url || pathname.startsWith(`${url}/`);
   };
 
+  const estruturaItems: NavItem[] = [
+    ...ESTRUTURA.slice(0, 2), // Polos, Cursos
+    ...(admin ? [{ title: "Períodos", url: "/periodos", icon: Calendar }] : []),
+    ...ESTRUTURA.slice(2), // Turmas, Disciplinas
+  ];
+
   const menuGroups = [
     { label: "Início", items: INICIO },
-    { label: "Estrutura Acadêmica", items: ESTRUTURA },
+    { label: "Estrutura Acadêmica", items: estruturaItems },
     { label: "Pessoas", items: admin ? [...PESSOAS_BASE, ...PESSOAS_ADMIN] : PESSOAS_BASE },
     ...(admin ? [{ label: "Administração", items: ADMIN_ONLY }] : []),
   ];

@@ -58,9 +58,9 @@ export default function TemplatesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["grade_templates"] });
-      toast.success("Template de notas criado com sucesso!");
+      setTimeout(() => toast.success("Template de notas criado com sucesso!"), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const delTpl = useMutation({
@@ -70,9 +70,9 @@ export default function TemplatesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["grade_templates"] });
-      toast.success("Template excluído com sucesso!");
+      setTimeout(() => toast.success("Template excluído com sucesso!"), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const setDefault = useMutation({
@@ -90,9 +90,9 @@ export default function TemplatesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["grade_templates"] });
-      toast.success("Template padrão atualizado!");
+      setTimeout(() => toast.success("Template padrão atualizado!"), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (!tenant.active) {

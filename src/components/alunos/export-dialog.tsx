@@ -46,7 +46,7 @@ export function ExportAlunosDialog({ students, classMap, onClose }: ExportAlunos
 
   const handleExport = async () => {
     if (selectedCols.length === 0) {
-      toast.error("Selecione ao menos uma coluna para exportar.");
+      setTimeout(() => toast.error("Selecione ao menos uma coluna para exportar."), 0);
       return;
     }
 
@@ -86,14 +86,14 @@ export function ExportAlunosDialog({ students, classMap, onClose }: ExportAlunos
       a.download = `${filename}.xlsx`;
       a.click();
       window.URL.revokeObjectURL(url);
-      toast.success("Arquivo Excel gerado!");
+      setTimeout(() => toast.success("Arquivo Excel gerado!"), 0);
     } else if (format === "json") {
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
       const a = document.createElement("a");
       a.href = jsonString;
       a.download = `${filename}.json`;
       a.click();
-      toast.success("Arquivo JSON gerado!");
+      setTimeout(() => toast.success("Arquivo JSON gerado!"), 0);
     } else if (format === "pdf") {
       const doc = new jsPDF();
       doc.setFontSize(16);
@@ -102,7 +102,7 @@ export function ExportAlunosDialog({ students, classMap, onClose }: ExportAlunos
       const tableRows = students.map(student => activeCols.map(col => getVal(student, col.key)));
       autoTable(doc, { head: [tableHeaders], body: tableRows, startY: 28, styles: { fontSize: 8 } });
       doc.save(`${filename}.pdf`);
-      toast.success("Arquivo PDF gerado!");
+      setTimeout(() => toast.success("Arquivo PDF gerado!"), 0);
     }
 
     onClose();

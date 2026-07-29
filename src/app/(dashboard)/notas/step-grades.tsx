@@ -65,18 +65,33 @@ export function StepGrades({
   classId,
   subjectId,
   institutionId,
+  userRole,
   onBack,
 }: {
   classId: string;
   subjectId: string;
   institutionId: string;
+  userRole: "owner" | "admin" | "coord_geral" | "coord_polo" | "user";
   onBack: () => void;
 }) {
   const qc = useQueryClient();
+  const isPoloCoordinator = userRole === "coord_polo";
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["notas-grid", classId, subjectId, institutionId],
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["notas-grid", classId, subjectId, institutionId, userRole],
     queryFn: async () => {
+      const { data: subject, error: subErr } = await supabase
+        .from("subjects")
+        .select("id, is_active")
+        .eq("id", subjectId)
+        .single();
+
+      if (subErr) throw subErr;
+
+      if (isPoloCoordinator && !subject.is_active) {
+        return { isForbidden: true, fields: [], students: [], grades: [] };
+      }
+
       const [tpl, students, grades] = await Promise.all([
         supabase
           .from("grade_templates")
@@ -98,6 +113,7 @@ export function StepGrades({
         .slice()
         .sort((a, b) => a.order_index - b.order_index);
       return {
+        isForbidden: false,
         fields,
         students: (students.data ?? []) as Student[],
         grades: (grades.data ?? []) as Grade[],
@@ -128,12 +144,16 @@ export function StepGrades({
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notas-grid", classId, subjectId] });
+      qc.invalidateQueries({
+        queryKey: ["notas-grid", classId, subjectId],
+        exact: false,
+      });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message || "Erro ao salvar nota.");
+    },
   });
 
-  // Mapeamento dinâmico de colunas para exportação
   const exportColumns = useMemo<ExportColumn[]>(() => {
     if (!data?.fields) return [];
     return [
@@ -146,7 +166,6 @@ export function StepGrades({
     ];
   }, [data?.fields]);
 
-  // Mapeamento dinâmico de dados das linhas para exportação
   const exportData = useMemo(() => {
     if (!data?.students || !data?.fields) return [];
 
@@ -170,7 +189,28 @@ export function StepGrades({
     });
   }, [data?.students, data?.fields, gradeMap]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground p-4">Carregando dados...</p>;
+
+  if (error) {
+    return <p className="text-sm text-destructive p-4">Ocorreu um erro ao carregar os dados.</p>;
+  }
+
+  if (data?.isForbidden) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm">
+          <p className="font-medium text-destructive">Acesso Negado</p>
+          <p className="text-muted-foreground mt-1">
+            Esta disciplina está oculta e não pode ser acessada por seu perfil.
+          </p>
+          <Button size="sm" variant="outline" onClick={onBack} className="mt-4">
+            <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!data) return null;
   const { fields, students } = data;
 
@@ -187,6 +227,7 @@ export function StepGrades({
       </Card>
     );
   }
+
   if (!students.length) {
     return (
       <Card>

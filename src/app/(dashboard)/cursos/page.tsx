@@ -142,9 +142,11 @@ export default function CursosPage() {
       qc.invalidateQueries({ queryKey: ["polos"] });
       setFormOpen(false);
       setEditing(null);
-      toast.success(editing ? "Curso atualizado com sucesso." : "Curso cadastrado com sucesso.");
+      setTimeout(() => {
+        toast.success(editing ? "Curso atualizado com sucesso." : "Curso cadastrado com sucesso.");
+      }, 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const del = useMutation({
@@ -154,9 +156,9 @@ export default function CursosPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["courses"] });
-      toast.success("Curso excluído com sucesso.");
+      setTimeout(() => toast.success("Curso excluído com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (!tenant.active) {
@@ -211,9 +213,9 @@ export default function CursosPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Total de Cursos</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : data.length}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -225,9 +227,9 @@ export default function CursosPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Ofertados em Polos</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : `${coursesWithPolosCount} / ${data.length}`}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

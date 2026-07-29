@@ -99,9 +99,9 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
-      toast.success("Status atualizado com sucesso.");
+      setTimeout(() => toast.success("Status atualizado com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(`Erro ao atualizar status: ${e.message}`),
+    onError: (e: Error) => setTimeout(() => toast.error(`Erro ao atualizar status: ${e.message}`), 0),
     onSettled: () => setUpdatingId(null),
   });
 
@@ -119,18 +119,18 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
       setFormOpen(false);
       setEditing(null);
-      toast.success("Aluno salvo com sucesso.");
+      setTimeout(() => toast.success("Aluno salvo com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const del = useMutation({
     mutationFn: deleteStudentAction,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
-      toast.success("Aluno excluído com sucesso.");
+      setTimeout(() => toast.success("Aluno excluído com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const importFn = useMutation({
@@ -138,9 +138,9 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["students", turmaId] });
       setImportOpen(false);
-      toast.success(`${data?.count ?? 0} alunos importados com sucesso.`);
+      setTimeout(() => toast.success(`${data?.count ?? 0} alunos importados com sucesso.`), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const classMap = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);

@@ -72,9 +72,9 @@ export function ImportDialog({ classes, defaultClassId, onImport, pending }: Pro
     } catch (e) {
       if (e instanceof z.ZodError) {
         console.error(e.errors);
-        toast.error("Erro de validação no JSON. Verifique o formato e os campos.");
+        setTimeout(() => toast.error("Erro de validação no JSON. Verifique o formato e os campos."), 0);
       } else {
-        toast.error((e as Error).message);
+        setTimeout(() => toast.error((e as Error).message), 0);
       }
     }
   }

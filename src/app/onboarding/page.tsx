@@ -273,10 +273,10 @@ function CreateForm() {
     mutationFn: bootstrapInstitutionAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
-      toast.success("Instituição criada!");
+      setTimeout(() => toast.success("Instituição criada!"), 0);
       router.replace("/dashboard");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   return (
@@ -327,24 +327,24 @@ function InviteForm() {
   const previewMut = useMutation({
     mutationFn: previewInviteAction,
     onSuccess: (res) => {
-      if (!res.found) { toast.error("Convite não encontrado"); return; }
-      if (res.expired) { toast.error("Convite expirado"); return; }
-      if (res.used) { toast.error("Convite já utilizado"); return; }
+      if (!res.found) { setTimeout(() => toast.error("Convite não encontrado"), 0); return; }
+      if (res.expired) { setTimeout(() => toast.error("Convite expirado"), 0); return; }
+      if (res.used) { setTimeout(() => toast.error("Convite já utilizado"), 0); return; }
       setPreviewData(res);
       setChosenRole("");
       setChosenPolos([]);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const redeemMut = useMutation({
     mutationFn: redeemInviteAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
-      toast.success("Convite aceito!");
+      setTimeout(() => toast.success("Convite aceito!"), 0);
       router.replace("/dashboard");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (previewData && previewData.found) {

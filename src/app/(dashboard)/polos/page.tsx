@@ -95,9 +95,11 @@ export default function PolosPage() {
       qc.invalidateQueries({ queryKey: ["polos"] });
       setFormOpen(false);
       setEditing(null);
-      toast.success(editing ? "Polo atualizado com sucesso." : "Polo cadastrado com sucesso.");
+      setTimeout(() => {
+        toast.success(editing ? "Polo atualizado com sucesso." : "Polo cadastrado com sucesso.");
+      }, 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   const del = useMutation({
@@ -107,9 +109,9 @@ export default function PolosPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["polos"] });
-      toast.success("Polo excluído com sucesso.");
+      setTimeout(() => toast.success("Polo excluído com sucesso."), 0);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
   });
 
   if (!tenant.active) {
@@ -163,9 +165,9 @@ export default function PolosPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Total de Polos</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : data.length}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -177,9 +179,9 @@ export default function PolosPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Estados Atendidos</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
                     {isLoading ? <Skeleton className="h-6 w-12 mt-1" /> : uniqueStates}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

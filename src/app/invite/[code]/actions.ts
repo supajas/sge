@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
-// Helper para obter o cliente Supabase Admin (bypassa RLS para consultas e gravações do sistema)
 function getAdminClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,14 +19,13 @@ function getAdminClient() {
 export async function previewInviteAction(code: string) {
   try {
     const supabaseUserClient = await createClient();
-    // Usa o admin se disponível para garantir leitura pública sem bloqueio de RLS
     const supabase = getAdminClient() ?? supabaseUserClient;
 
     const codeUpper = code.trim().toUpperCase();
     const { data: inv, error: invErr } = await supabase
       .from("invites")
       .select(
-        "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, institutions(name, city, state)"
+        "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, course_ids, institutions(name, city, state)"
       )
       .eq("code", codeUpper)
       .maybeSingle();
@@ -43,11 +41,15 @@ export async function previewInviteAction(code: string) {
     const expired = new Date(inv.expires_at).getTime() < Date.now();
 
     const invitePolos: string[] = Array.isArray(inv.polo_ids) ? (inv.polo_ids as string[]) : [];
-    const needsPolo = !invitePolos.length;
-    const needsRole = !inv.role;
+    const inviteCourses: string[] = Array.isArray(inv.course_ids) ? (inv.course_ids as string[]) : [];
+    
+    const role = (inv.role as string | null) ?? null;
+    const requiresPolo = role === "coord_polo" || role === "tutor_presencial";
+    const needsPolo = requiresPolo && !invitePolos.length;
+    const needsRole = !role;
 
     let polos: { id: string; name: string }[] = [];
-    if (needsPolo) {
+    if (needsPolo || requiresPolo) {
       const { data: p } = await supabase
         .from("polos")
         .select("id, name")
@@ -61,12 +63,14 @@ export async function previewInviteAction(code: string) {
       institutionName: inst?.name ?? "",
       institutionCity: inst?.city ?? "",
       institutionState: inst?.state ?? "",
-      role: (inv.role as string | null) ?? null,
+      role,
       email: inv.email,
       expired,
       used: !!inv.used_at && inv.single_use,
       needsRole,
       needsPolo,
+      invitePolos,
+      inviteCourses,
       polos,
     };
   } catch (err: any) {
@@ -88,18 +92,16 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Validação inicial explícita para evitar 500 no Node caso tente ler user.id sem login
     if (!user) {
       throw new Error("Você precisa estar autenticado para aceitar o convite.");
     }
 
     const code = input?.code?.trim().toUpperCase();
     const role = input?.role ?? null;
-    const polo_ids = input?.polo_ids ?? [];
+    const inputPolos = input?.polo_ids ?? [];
 
     if (!code) throw new Error("Código do convite não informado.");
 
-    // Cliente Admin para operações seguras no banco de dados
     const supabaseAdmin = getAdminClient() ?? supabase;
 
     const { data: inv, error } = await supabaseAdmin
@@ -113,22 +115,24 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
     if (inv.used_at && inv.single_use) throw new Error("Este convite já foi utilizado.");
     if (new Date(inv.expires_at).getTime() < Date.now()) throw new Error("Este convite já expirou.");
 
-    // Validação de email correspondente se o convite for direcionado
     if (inv.email && user.email) {
       if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
         throw new Error(`Este convite foi enviado para ${inv.email}. Faça login com esta conta para aceitar.`);
       }
     }
 
-    let finalRole: "admin" | "coord_geral" | "coord_polo" | null = (inv.role as any) ?? null;
+    let finalRole: string | null = (inv.role as any) ?? null;
     if (!finalRole) {
       if (!role) throw new Error("Selecione o seu papel para continuar.");
-      if (role !== "coord_geral" && role !== "coord_polo") throw new Error("Papel selecionado é inválido.");
       finalRole = role;
     }
 
+    // Combina os polos salvos no convite com os selecionados na tela
     const invitePolos: string[] = Array.isArray(inv.polo_ids) ? (inv.polo_ids as string[]) : [];
-    const finalPolos = invitePolos.length ? invitePolos : polo_ids;
+    const rawPolos = inputPolos.length ? inputPolos : invitePolos;
+    const finalPolos = Array.from(new Set(rawPolos.filter((id): id is string => Boolean(id && typeof id === "string"))));
+
+    const inviteCourses: string[] = Array.isArray(inv.course_ids) ? (inv.course_ids as string[]) : [];
 
     if (finalRole === "coord_polo" && finalPolos.length === 0) {
       throw new Error("Selecione ao menos um polo.");
@@ -143,7 +147,7 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
       if (!polosOk || polosOk.length !== finalPolos.length) throw new Error("Polo selecionado é inválido.");
     }
 
-    // Busca ou cria o vínculo (membership)
+    // 1. Criar ou Buscar Membership
     const { data: existing } = await supabaseAdmin
       .from("memberships")
       .select("id")
@@ -160,31 +164,40 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
         .single();
       if (memErr || !created) throw new Error(memErr?.message ?? "Falha ao criar vínculo com a instituição.");
       membershipId = created.id;
+    } else {
+      await supabaseAdmin
+        .from("memberships")
+        .update({ role: finalRole })
+        .eq("id", membershipId);
     }
 
-    // Vínculo com cursos (se houver no convite)
-    if (inv.course_ids?.length) {
-      await supabaseAdmin.from("coordinator_courses").upsert(
-        (inv.course_ids as string[]).map((cid: string) => ({
-          membership_id: membershipId!,
-          course_id: cid,
-        })),
-        { onConflict: "membership_id,course_id" }
-      );
+    // 2. Vínculo com Cursos (membership_courses)
+    if (inviteCourses.length) {
+      const courseRows = inviteCourses.map((cid: string) => ({
+        membership_id: membershipId!,
+        course_id: cid,
+      }));
+      const { error: courseErr } = await supabaseAdmin
+        .from("membership_courses")
+        .upsert(courseRows, { onConflict: "membership_id,course_id" });
+
+      if (courseErr) console.error("Erro ao salvar membership_courses:", courseErr);
     }
 
-    // Vínculo com polos
+    // 3. Vínculo com Polos (membership_polos)
     if (finalPolos.length) {
-      await supabaseAdmin.from("coordinator_polos").upsert(
-        finalPolos.map((pid: string) => ({
-          membership_id: membershipId!,
-          polo_id: pid,
-        })),
-        { onConflict: "membership_id,polo_id" }
-      );
+      const poloRows = finalPolos.map((pid: string) => ({
+        membership_id: membershipId!,
+        polo_id: pid,
+      }));
+      const { error: poloErr } = await supabaseAdmin
+        .from("membership_polos")
+        .upsert(poloRows, { onConflict: "membership_id,polo_id" });
+
+      if (poloErr) console.error("Erro ao salvar membership_polos:", poloErr);
     }
 
-    // Marca o convite como utilizado se for uso único
+    // 4. Marcar convite como utilizado
     if (inv.single_use) {
       await supabaseAdmin
         .from("invites")
@@ -192,7 +205,7 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
         .eq("id", inv.id);
     }
 
-    // Registro no histórico de aprovação
+    // 5. Histórico de aprovação
     const actorId = inv.created_by ?? user.id;
     await supabaseAdmin.from("approval_history").insert({
       institution_id: inv.institution_id,
@@ -206,7 +219,6 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
       metadata: { invite_id: inv.id, code },
     });
 
-    // Retorna a lista atualizada de membros para atualizar o estado no front-end
     const { data: updatedMemberships } = await supabaseAdmin
       .from("memberships")
       .select(`
@@ -214,7 +226,8 @@ export async function redeemInviteAction(input: RedeemInviteInput) {
         institution_id,
         role,
         institutions ( id, name, city, state, logo_url ),
-        coordinator_polos ( polo_id )
+        membership_polos ( polo_id ),
+        membership_courses ( course_id )
       `)
       .eq("user_id", user.id);
 

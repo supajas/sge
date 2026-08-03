@@ -27,7 +27,7 @@ const allowedRoles = [
 const createInviteSchema = z.object({
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(allowedRoles), // Agora é obrigatório
+  role: z.enum(allowedRoles),
   expires_in_days: z.number().int().min(1).max(90).default(7),
   single_use: z.boolean().default(true),
   polo_ids: z.array(z.string().uuid()).optional(),
@@ -38,7 +38,7 @@ export async function createInviteAction(input: unknown) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Usuário não autenticado");
+  if (!user) throw new Error("Usuário não autenticado.");
 
   const data = createInviteSchema.parse(input);
 
@@ -48,8 +48,9 @@ export async function createInviteAction(input: unknown) {
     .eq("institution_id", data.institution_id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (memErr || !mem || (mem.role !== "owner" && mem.role !== "admin")) {
-    throw new Error("Sem permissão para criar convite");
+
+  if (memErr || !mem || (mem.role !== "owner" && mem.role !== "admin" && mem.role !== "coord_geral")) {
+    throw new Error("Sem permissão para criar convite nesta instituição.");
   }
 
   const expires = new Date(Date.now() + data.expires_in_days * 86400_000).toISOString();
@@ -70,6 +71,16 @@ export async function createInviteAction(input: unknown) {
   const requiresPolo = data.role === "coord_polo" || data.role === "tutor_presencial";
   const requiresCourse = data.role === "coord_curso" || data.role === "tutor_distancia" || data.role === "professor";
 
+  const finalPoloIds = requiresPolo ? (data.polo_ids ?? []) : [];
+  const finalCourseIds = requiresCourse ? (data.course_ids ?? []) : [];
+
+  if (requiresPolo && finalPoloIds.length === 0) {
+    throw new Error("Selecione pelo menos um polo para este perfil.");
+  }
+  if (requiresCourse && finalCourseIds.length === 0) {
+    throw new Error("Selecione pelo menos um curso para este perfil.");
+  }
+
   const { data: inv, error } = await supabase
     .from("invites")
     .insert({
@@ -77,8 +88,8 @@ export async function createInviteAction(input: unknown) {
       institution_id: data.institution_id,
       email: data.email ?? null,
       role: data.role,
-      polo_ids: requiresPolo ? (data.polo_ids ?? []) : [],
-      course_ids: requiresCourse ? (data.course_ids ?? []) : [],
+      polo_ids: finalPoloIds,
+      course_ids: finalCourseIds,
       expires_at: expires,
       single_use: data.single_use,
       created_by: user.id,
@@ -86,7 +97,7 @@ export async function createInviteAction(input: unknown) {
     .select("id")
     .single();
 
-  if (error || !inv) throw new Error(error?.message ?? "Falha ao criar convite");
+  if (error || !inv) throw new Error(error?.message ?? "Falha ao criar convite.");
 
   revalidatePath("/convites");
   return inv;
@@ -96,7 +107,7 @@ const updateInviteSchema = z.object({
   id: z.string().uuid(),
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(allowedRoles), // Agora é obrigatório
+  role: z.enum(allowedRoles),
   expires_in_days: z.number().int().min(1).max(90),
   polo_ids: z.array(z.string().uuid()).optional(),
   course_ids: z.array(z.string().uuid()).optional(),
@@ -106,7 +117,7 @@ export async function updateInviteAction(input: unknown) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Usuário não autenticado");
+  if (!user) throw new Error("Usuário não autenticado.");
 
   const data = updateInviteSchema.parse(input);
 
@@ -116,8 +127,9 @@ export async function updateInviteAction(input: unknown) {
     .eq("institution_id", data.institution_id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (memErr || !mem || (mem.role !== "owner" && mem.role !== "admin")) {
-    throw new Error("Sem permissão para editar este convite");
+
+  if (memErr || !mem || (mem.role !== "owner" && mem.role !== "admin" && mem.role !== "coord_geral")) {
+    throw new Error("Sem permissão para editar este convite.");
   }
 
   const { data: existingInvite, error: existingInviteError } = await supabase
@@ -136,18 +148,28 @@ export async function updateInviteAction(input: unknown) {
   const requiresPolo = data.role === "coord_polo" || data.role === "tutor_presencial";
   const requiresCourse = data.role === "coord_curso" || data.role === "tutor_distancia" || data.role === "professor";
 
+  const finalPoloIds = requiresPolo ? (data.polo_ids ?? []) : [];
+  const finalCourseIds = requiresCourse ? (data.course_ids ?? []) : [];
+
+  if (requiresPolo && finalPoloIds.length === 0) {
+    throw new Error("Selecione pelo menos um polo para este perfil.");
+  }
+  if (requiresCourse && finalCourseIds.length === 0) {
+    throw new Error("Selecione pelo menos um curso para este perfil.");
+  }
+
   const { error } = await supabase
     .from("invites")
     .update({
       email: data.email ?? null,
       role: data.role,
-      polo_ids: requiresPolo ? (data.polo_ids ?? []) : [],
-      course_ids: requiresCourse ? (data.course_ids ?? []) : [],
+      polo_ids: finalPoloIds,
+      course_ids: finalCourseIds,
       expires_at: expires,
     })
     .eq("id", data.id);
 
-  if (error) throw new Error(error?.message ?? "Falha ao atualizar convite");
+  if (error) throw new Error(error?.message ?? "Falha ao atualizar convite.");
 
   revalidatePath("/convites");
   return { success: true };

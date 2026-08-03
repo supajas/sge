@@ -56,12 +56,21 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
         const userId = session?.user?.id;
         if (data.updatedMemberships && userId) {
           const poloIdsByMembership: Record<string, string[]> = {};
+          const courseIdsByMembership: Record<string, string[]> = {};
+
           for (const m of data.updatedMemberships) {
-            poloIdsByMembership[m.id] = (m.coordinator_polos ?? []).map(
+            // Mapeia os polos ajustando para a tabela relacional membership_polos
+            poloIdsByMembership[m.id] = (m.membership_polos ?? []).map(
               (c: { polo_id: string }) => c.polo_id,
             );
+
+            // Mapeia os cursos ajustando para a tabela relacional membership_courses
+            courseIdsByMembership[m.id] = (m.membership_courses ?? []).map(
+              (c: { course_id: string }) => c.course_id,
+            );
           }
-          const memberships = data.updatedMemberships.map(m => ({
+
+          const memberships = data.updatedMemberships.map((m) => ({
             membershipId: m.id,
             institutionId: m.institution_id,
             institutionName: (m.institutions as any).name,
@@ -71,11 +80,15 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
             role: m.role as AppRole,
           }));
 
-          queryClient.setQueryData(["memberships", userId], { memberships, poloIdsByMembership });
+          queryClient.setQueryData(["memberships", userId], {
+            memberships,
+            poloIdsByMembership,
+            courseIdsByMembership,
+          });
         } else {
           await queryClient.removeQueries({ queryKey: ["memberships"] });
         }
-        
+
         localStorage.setItem("active_institution_id", data.institutionId);
         setTimeout(() => toast.success("Convite aceito! Bem-vindo(a)."), 0);
         window.location.href = "/dashboard";
@@ -83,7 +96,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
     },
     onError: (e) => {
       setTimeout(() => toast.error(e.message), 0);
-    }
+    },
   });
 
   // Função para iniciar o login com o Google preservando o destino do convite
@@ -105,7 +118,11 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
   };
 
   if (sessionLoading || previewLoading) {
-    return <Center><p>Carregando...</p></Center>;
+    return (
+      <Center>
+        <p>Carregando...</p>
+      </Center>
+    );
   }
 
   if (previewError) {
@@ -138,9 +155,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
         <Alert>
           <Check className="h-4 w-4" />
           <AlertTitle>Convite já utilizado</AlertTitle>
-          <AlertDescription>
-            Este convite já foi aceito.
-          </AlertDescription>
+          <AlertDescription>Este convite já foi aceito.</AlertDescription>
         </Alert>
       </Center>
     );
@@ -152,9 +167,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Convite expirado</AlertTitle>
-          <AlertDescription>
-            Este convite não é mais válido.
-          </AlertDescription>
+          <AlertDescription>Este convite não é mais válido.</AlertDescription>
         </Alert>
       </Center>
     );
@@ -172,7 +185,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       </Center>
     );
   }
-  
+
   const showPoloPicker = preview.needsPolo && role === "coord_polo";
   const canSubmit = (preview.needsRole ? !!role : true) && (showPoloPicker ? polos.length > 0 : true);
 
@@ -216,7 +229,9 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
                   <Checkbox
                     checked={polos.includes(p.id)}
                     onCheckedChange={(checked) => {
-                      setPolos(current => checked ? [...current, p.id] : current.filter(id => id !== p.id))
+                      setPolos((current) =>
+                        checked ? [...current, p.id] : current.filter((id) => id !== p.id)
+                      );
                     }}
                   />
                   {p.name}

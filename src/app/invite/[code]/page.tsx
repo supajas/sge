@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useState, use } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { previewInviteAction, redeemInviteAction } from "./actions";
 import { useSession } from "@/lib/session";
@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Check, PartyPopper } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 function Center({ children }: { children: React.ReactNode }) {
   return (
@@ -36,16 +36,17 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
   const code = resolvedParams.code;
 
   const { session, loading: sessionLoading } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   const [role, setRole] = useState<"coord_geral" | "coord_polo" | "">("");
   const [polos, setPolos] = useState<string[]>([]);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Busca as informações do convite publicamente (independente de ter sessão ou não)
   const { data: preview, isLoading: previewLoading, error: previewError } = useQuery({
     queryKey: ["invite_preview", code],
     queryFn: () => previewInviteAction(code),
-    enabled: !!session && !!code,
+    enabled: !!code,
   });
 
   const redeem = useMutation({
@@ -54,7 +55,6 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       if (data?.institutionId) {
         const userId = session?.user?.id;
         if (data.updatedMemberships && userId) {
-          // ok Manually construct the cache shape expected by useTenant's query
           const poloIdsByMembership: Record<string, string[]> = {};
           for (const m of data.updatedMemberships) {
             poloIdsByMembership[m.id] = (m.coordinator_polos ?? []).map(
@@ -73,7 +73,6 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
 
           queryClient.setQueryData(["memberships", userId], { memberships, poloIdsByMembership });
         } else {
-          // Fallback to simple invalidation if priming fails
           await queryClient.removeQueries({ queryKey: ["memberships"] });
         }
         
@@ -87,14 +86,25 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
     }
   });
 
-  useEffect(() => {
-    if (!sessionLoading && !session) {
-      const currentPath = `/invite/${code}`;
-      router.replace(`/?next=/invite/${code}`);
+  // Função para iniciar o login com o Google preservando o destino do convite
+  const handleGoogleLogin = async () => {
+    try {
+      setIsLoggingIn(true);
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/invite/${code}`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao iniciar autenticação.");
+      setIsLoggingIn(false);
     }
-  }, [session, sessionLoading, router, code]);
+  };
 
-  if (sessionLoading || !session || previewLoading) {
+  if (sessionLoading || previewLoading) {
     return <Center><p>Carregando...</p></Center>;
   }
 
@@ -177,7 +187,8 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          redeem.mutate({ code, role: role === "" ? undefined : role, polo_ids: polos, });
+          if (!session) return;
+          redeem.mutate({ code, role: role === "" ? undefined : role, polo_ids: polos });
         }}
         className="mt-6 space-y-4 text-left"
       >
@@ -215,13 +226,24 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
           </div>
         )}
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!canSubmit || redeem.isPending}
-        >
-          {redeem.isPending ? "Aceitando..." : "Entrar e aceitar convite"}
-        </Button>
+        {!session ? (
+          <Button
+            type="button"
+            className="w-full"
+            disabled={isLoggingIn}
+            onClick={handleGoogleLogin}
+          >
+            {isLoggingIn ? "Redirecionando para o Google..." : "Entrar e aceitar convite"}
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!canSubmit || redeem.isPending}
+          >
+            {redeem.isPending ? "Aceitando..." : "Aceitar convite"}
+          </Button>
+        )}
       </form>
     </Center>
   );

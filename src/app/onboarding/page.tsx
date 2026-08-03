@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { Building2, Mail, ArrowLeft, Loader2, ChevronRight, Plus } from "lucide-react";
 import { useSession } from "@/lib/session";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,12 +24,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ROLE_LABELS, type AppRole } from "@/lib/roles";
 import { toast } from "sonner";
 import { bootstrapInstitutionAction } from "./actions";
-import { previewInviteAction, redeemInviteAction } from "@/lib/actions/invites";
+import { previewInviteAction, redeemInviteAction } from "@/app/invite/[code]/actions";
 
 const instSchema = z.object({
   name: z.string().trim().min(2, "Mínimo 2 caracteres").max(120),
-  city: z.string().trim().min(2).max(80),
-  state: z.string().trim().min(2).max(40),
+  city: z.string().trim().min(2, "Mínimo 2 caracteres").max(80),
+  state: z.string().trim().min(2, "Mínimo 2 caracteres").max(40),
   logo_url: z.string().url("URL inválida").optional().or(z.literal("")),
 });
 
@@ -53,10 +53,11 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("menu");
   const [checkingMembership, setCheckingMembership] = useState(true);
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
     async function checkExistingMemberships() {
-      if (loading) return;
+      if (loading || hasInitialized) return;
 
       if (!user) {
         router.replace("/");
@@ -64,6 +65,7 @@ export default function OnboardingPage() {
       }
 
       try {
+        const supabase = createClient();
         const { data, error } = await supabase
           .from("memberships")
           .select(
@@ -86,7 +88,7 @@ export default function OnboardingPage() {
         const list = (data || []) as unknown as UserMembership[];
         setMemberships(list);
 
-        // Se tem 1 ou mais instituições, exibe a tela de seleção
+        // Se tem 1 ou mais instituições, exibe a tela de seleção por padrão na chegada
         if (list.length >= 1) {
           setStep("select");
         } else {
@@ -96,11 +98,12 @@ export default function OnboardingPage() {
         console.error("Erro ao verificar vínculos do usuário:", err);
       } finally {
         setCheckingMembership(false);
+        setHasInitialized(true);
       }
     }
 
     checkExistingMemberships();
-  }, [user, loading, router]);
+  }, [user, loading, router, hasInitialized]);
 
   if (loading || checkingMembership) {
     return (
@@ -115,7 +118,7 @@ export default function OnboardingPage() {
       {step !== "menu" && step !== "select" && (
         <button
           onClick={() => setStep(memberships.length > 0 ? "select" : "menu")}
-          className="mb-6 inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="mb-6 inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
@@ -209,27 +212,29 @@ function Menu({ onPick }: { onPick: (s: Step) => void }) {
     <>
       <h1 className="text-2xl font-semibold tracking-tight">Bem-vindo!</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Você ainda não pertence a nenhuma instituição. Escolha uma opção.
+        Você ainda não pertence a nenhuma instituição. Escolha uma opção para começar.
       </p>
-      <div className="mt-8 space-y-2">
+      <div className="mt-8 space-y-3">
         <ActionCard
           icon={<Building2 className="h-5 w-5" />}
           title="Criar uma nova Instituição"
-          body="Comece do zero como Owner."
+          body="Comece do zero criando e administrando sua própria instituição."
           onClick={() => onPick("create")}
         />
         <ActionCard
           icon={<Mail className="h-5 w-5" />}
           title="Possuo um convite"
-          body="Use o código enviado pela sua instituição."
+          body="Use o código de convite enviado pela sua equipe."
           onClick={() => onPick("invite")}
         />
-        <button
-          className="mt-6 text-sm text-muted-foreground hover:text-foreground"
-          onClick={() => onPick("no-invite")}
-        >
-          Não tenho convite
-        </button>
+        <div className="pt-2 text-center">
+          <button
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => onPick("no-invite")}
+          >
+            Não tenho convite
+          </button>
+        </div>
       </div>
     </>
   );
@@ -251,19 +256,18 @@ function ActionCard({
       onClick={onClick}
       className="flex w-full items-start gap-4 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
         {icon}
       </div>
       <div>
-        <div className="font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{body}</div>
+        <div className="font-medium text-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{body}</div>
       </div>
     </button>
   );
 }
 
 function CreateForm() {
-  const router = useRouter();
   const form = useForm<z.infer<typeof instSchema>>({
     resolver: zodResolver(instSchema),
     defaultValues: { name: "", city: "", state: "", logo_url: "" },
@@ -273,22 +277,22 @@ function CreateForm() {
     mutationFn: bootstrapInstitutionAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
-      setTimeout(() => toast.success("Instituição criada!"), 0);
-      router.replace("/dashboard");
+      toast.success("Instituição criada com sucesso!");
+      window.location.href = "/dashboard";
     },
-    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
     <>
       <h1 className="text-2xl font-semibold">Nova Instituição</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Preencha os dados básicos.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Preencha os dados básicos da instituição.</p>
       <Card className="mt-6">
         <CardContent className="p-6">
           <form onSubmit={form.handleSubmit((v) => m.mutate(v))} className="space-y-4">
             <div>
               <Label htmlFor="name">Nome da Instituição</Label>
-              <Input id="name" {...form.register("name")} />
+              <Input id="name" {...form.register("name")} placeholder="Ex: Instituto Federal" />
               {form.formState.errors.name && (
                 <p className="mt-1 text-xs text-destructive">{form.formState.errors.name.message}</p>
               )}
@@ -296,16 +300,25 @@ function CreateForm() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="city">Cidade</Label>
-                <Input id="city" {...form.register("city")} />
+                <Input id="city" {...form.register("city")} placeholder="Ex: São Luís" />
+                {form.formState.errors.city && (
+                  <p className="mt-1 text-xs text-destructive">{form.formState.errors.city.message}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="state">Estado</Label>
-                <Input id="state" maxLength={40} {...form.register("state")} />
+                <Input id="state" maxLength={40} {...form.register("state")} placeholder="Ex: MA" />
+                {form.formState.errors.state && (
+                  <p className="mt-1 text-xs text-destructive">{form.formState.errors.state.message}</p>
+                )}
               </div>
             </div>
             <div>
               <Label htmlFor="logo">Logo (URL, opcional)</Label>
               <Input id="logo" placeholder="https://..." {...form.register("logo_url")} />
+              {form.formState.errors.logo_url && (
+                <p className="mt-1 text-xs text-destructive">{form.formState.errors.logo_url.message}</p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={m.isPending}>
               {m.isPending ? "Criando..." : "Criar Instituição"}
@@ -318,7 +331,6 @@ function CreateForm() {
 }
 
 function InviteForm() {
-  const router = useRouter();
   const [code, setCode] = useState("");
   const [previewData, setPreviewData] = useState<Awaited<ReturnType<typeof previewInviteAction>> | null>(null);
   const [chosenRole, setChosenRole] = useState<"coord_geral" | "coord_polo" | "">("");
@@ -327,33 +339,35 @@ function InviteForm() {
   const previewMut = useMutation({
     mutationFn: previewInviteAction,
     onSuccess: (res) => {
-      if (!res.found) { setTimeout(() => toast.error("Convite não encontrado"), 0); return; }
-      if (res.expired) { setTimeout(() => toast.error("Convite expirado"), 0); return; }
-      if (res.used) { setTimeout(() => toast.error("Convite já utilizado"), 0); return; }
+      if (!res.found) { toast.error("Convite não encontrado"); return; }
+      if (res.expired) { toast.error("Este convite expirou"); return; }
+      if (res.used) { toast.error("Este convite já foi utilizado"); return; }
       setPreviewData(res);
       setChosenRole("");
       setChosenPolos([]);
     },
-    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const redeemMut = useMutation({
     mutationFn: redeemInviteAction,
     onSuccess: (res) => {
       localStorage.setItem("active_institution_id", res.institutionId);
-      setTimeout(() => toast.success("Convite aceito!"), 0);
-      router.replace("/dashboard");
+      toast.success("Convite aceito! Bem-vindo(a).");
+      window.location.href = "/dashboard";
     },
-    onError: (e: Error) => setTimeout(() => toast.error(e.message), 0),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   if (previewData && previewData.found) {
     const showPoloPicker =
       previewData.needsPolo &&
       (previewData.needsRole ? chosenRole === "coord_polo" : previewData.role === "coord_polo");
+    
     const canSubmit =
       (!previewData.needsRole || !!chosenRole) &&
       (!showPoloPicker || chosenPolos.length > 0);
+
     return (
       <>
         <h1 className="text-2xl font-semibold">{previewData.institutionName}</h1>
@@ -364,18 +378,19 @@ function InviteForm() {
           <CardContent className="space-y-4 p-6">
             {!previewData.needsRole && previewData.role && (
               <p className="text-sm">
-                Você entrará como <strong>{ROLE_LABELS[previewData.role as AppRole]}</strong>.
+                Você entrará como <strong>{ROLE_LABELS[previewData.role as AppRole] || previewData.role}</strong>.
               </p>
             )}
+
             {previewData.needsRole && (
               <div>
-                <Label>Seu papel</Label>
+                <Label>Seu papel na instituição</Label>
                 <Select
                   value={chosenRole}
                   onValueChange={(v) => setChosenRole(v as "coord_geral" | "coord_polo")}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Selecione o papel" />
+                    <SelectValue placeholder="Selecione o papel..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="coord_geral">Coordenador Geral</SelectItem>
@@ -384,15 +399,16 @@ function InviteForm() {
                 </Select>
               </div>
             )}
+
             {showPoloPicker && (
               <div>
-                <Label>Polos</Label>
+                <Label>Quais polos você coordena?</Label>
                 <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded-md border p-3">
                   {previewData.polos.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhum polo cadastrado ainda.</p>
+                    <p className="text-xs text-muted-foreground">Nenhum polo cadastrado nesta instituição.</p>
                   ) : (
                     previewData.polos.map((p) => (
-                      <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
                         <Checkbox
                           checked={chosenPolos.includes(p.id)}
                           onCheckedChange={(v) =>
@@ -408,19 +424,21 @@ function InviteForm() {
                 </div>
               </div>
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setPreviewData(null)}>Voltar</Button>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setPreviewData(null)}>
+                Voltar
+              </Button>
               <Button
                 className="flex-1"
                 disabled={!canSubmit || redeemMut.isPending}
-                onClick={() => redeemMut.mutate({
-                  code,
-                  role:
-                    previewData?.found && previewData.needsRole
-                      ? chosenRole || undefined
-                      : undefined,
-                  polo_ids: previewData?.found && previewData.needsPolo ? chosenPolos : [],
-                })}
+                onClick={() =>
+                  redeemMut.mutate({
+                    code,
+                    role: previewData.needsRole ? (chosenRole || undefined) : undefined,
+                    polo_ids: showPoloPicker ? chosenPolos : [],
+                  })
+                }
               >
                 {redeemMut.isPending ? "Aceitando..." : "Aceitar convite"}
               </Button>
@@ -434,22 +452,22 @@ function InviteForm() {
   return (
     <>
       <h1 className="text-2xl font-semibold">Usar convite</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Informe o código recebido.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Informe o código alfanumérico que você recebeu.</p>
       <Card className="mt-6">
         <CardContent className="space-y-4 p-6">
           <div>
-            <Label htmlFor="code">Código</Label>
+            <Label htmlFor="code">Código do Convite</Label>
             <Input
               id="code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="ABC12345"
-              className="uppercase"
+              placeholder="Ex: ABC12345"
+              className="uppercase tracking-wider font-mono"
             />
           </div>
           <Button
             className="w-full"
-            disabled={!code || previewMut.isPending}
+            disabled={!code.trim() || previewMut.isPending}
             onClick={() => previewMut.mutate(code)}
           >
             {previewMut.isPending ? "Validando..." : "Continuar"}
@@ -464,9 +482,8 @@ function NoInvite() {
   return (
     <>
       <h1 className="text-2xl font-semibold">Sem acesso ainda</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Você ainda não possui acesso a nenhuma instituição. Solicite um convite ao administrador
-        da sua instituição.
+      <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+        Você ainda não possui vínculo com nenhuma instituição. Entre em contato com o administrador da sua instituição ou coordenador para receber um código de convite por e-mail.
       </p>
     </>
   );

@@ -45,8 +45,8 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
       if (error) throw error;
       return (data ?? []).map((c) => ({
         id: c.id,
-        label: `${(c.courses as { name: string })?.name ?? ""} · ${c.name} · ${
-          (c.polos as { name: string })?.name ?? ""
+        label: `${(c.courses as unknown as { name: string })?.name ?? ""} · ${c.name} · ${
+          (c.polos as unknown as { name: string })?.name ?? ""
         }`,
       }));
     },

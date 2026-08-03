@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Status } from "@/lib/types/students";
 
 interface ImportDialogProps {
   classes: Array<{ id: string; label: string }>;
   defaultClassId?: string;
-  onImport: (rows: Array<{ name: string; registration: string; cpf?: string; email?: string; class_id: string }>) => void;
+  // cpf/email seguem o tipo de Student: obrigatórios como chave, mas aceitam null como valor.
+  onImport: (rows: Array<{ name: string; registration: string; cpf: string | null; email: string | null; class_id: string; status: Status }>) => void;
   pending: boolean;
 }
 
@@ -65,7 +67,7 @@ export function ImportDialog({
     }
 
     try {
-      let rows: Array<{ name: string; registration: string; cpf?: string; email?: string; class_id: string }> = [];
+      let rows: Array<{ name: string; registration: string; cpf: string | null; email: string | null; class_id: string; status: Status }> = [];
 
       if (importType === "csv") {
         const lines = fileContent.split(/\r?\n/).filter((line) => line.trim() !== "");
@@ -80,9 +82,12 @@ export function ImportDialog({
           return {
             registration: cols[0] ?? "",
             name: cols[1] ?? "",
-            cpf: cols[2] ?? "",
-            email: cols[3] ?? "",
+            cpf: cols[2] || null,
+            email: cols[3] || null,
             class_id: selectedClassId,
+            // Todo aluno importado entra como "ativo" por padrão; o status
+            // pode ser alterado individualmente depois pela tela de Alunos.
+            status: "ativo" as Status,
           };
         }).filter((r) => r.name && r.registration);
       } else {
@@ -91,9 +96,13 @@ export function ImportDialog({
         rows = list.map((item: any) => ({
           registration: String(item.registration || item.matricula || ""),
           name: String(item.name || item.nome || ""),
-          cpf: item.cpf ? String(item.cpf) : undefined,
-          email: item.email ? String(item.email) : undefined,
+          cpf: item.cpf ? String(item.cpf) : null,
+          email: item.email ? String(item.email) : null,
           class_id: selectedClassId,
+          // Usa o status do arquivo se vier preenchido (ex: "trancado"),
+          // senão cai no padrão "ativo". A validação final do valor
+          // acontece no servidor (actions.ts).
+          status: (item.status as Status) || ("ativo" as Status),
         })).filter((r) => r.name && r.registration);
       }
 

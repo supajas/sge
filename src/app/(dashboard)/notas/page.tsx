@@ -262,7 +262,7 @@ function NotasPageContent() {
           </CardHeader>
 
           <CardContent className="pt-4">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
               {selects
                 .filter((s) => s.visible)
                 .map((s) => (

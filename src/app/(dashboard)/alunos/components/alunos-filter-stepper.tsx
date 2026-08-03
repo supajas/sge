@@ -126,7 +126,7 @@ export function AlunosFilterStepper({
       </CardHeader>
 
       <CardContent className="pt-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
           {selects.map((s) => (
             <div key={s.id} className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground">{s.label}</Label>

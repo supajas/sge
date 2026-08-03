@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Student, Status } from "@/lib/types/students";
 
 // Helper to authorize admin-like users for a specific institution
-async function authorizeAdmin(supabase: ReturnType<typeof createClient>, institutionId: string) {
+async function authorizeAdmin(supabase: Awaited<ReturnType<typeof createClient>>, institutionId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Usuário não autenticado.");
 
@@ -24,7 +24,7 @@ async function authorizeAdmin(supabase: ReturnType<typeof createClient>, institu
 }
 
 // Helper to authorize any logged-in member of an institution
-async function authorizeMember(supabase: ReturnType<typeof createClient>, institutionId: string) {
+async function authorizeMember(supabase: Awaited<ReturnType<typeof createClient>>, institutionId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Usuário não autenticado.");
   

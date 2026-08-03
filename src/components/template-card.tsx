@@ -31,6 +31,12 @@ import {
 import { Field, Template, KIND_LABEL } from "@/lib/types/templates";
 import { reorderTemplateFieldsAction } from "@/app/(dashboard)/templates-notas/actions";
 
+// Tipo explícito das variáveis da mutation de reordenação. Passar a Server
+// Action diretamente como `mutationFn` fazia o TypeScript não conseguir
+// inferir o tipo do parâmetro através da fronteira client/server, caindo
+// em `unknown` — por isso a envolvemos numa arrow function tipada aqui.
+type ReorderVars = { template_id: string; field_id: string; direction: "up" | "down" };
+
 export function TemplateCard({
   template,
   canEdit,
@@ -110,7 +116,9 @@ export function TemplateCard({
   });
 
   const reorder = useMutation({
-    mutationFn: reorderTemplateFieldsAction,
+    mutationFn: async (vars: ReorderVars) => {
+      return reorderTemplateFieldsAction(vars);
+    },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ["grade_templates"] });
       const previousTemplates = qc.getQueryData<Template[]>(["grade_templates"]);

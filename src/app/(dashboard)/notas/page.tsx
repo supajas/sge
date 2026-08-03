@@ -42,7 +42,7 @@ const searchSchema = z.object({
   subjectId: z.string().optional(),
 });
 
-type Search = z.infer<searchSchema>;
+type Search = z.infer<typeof searchSchema>;
 
 function useNotasSearchParams() {
   const searchParams = useSearchParams();

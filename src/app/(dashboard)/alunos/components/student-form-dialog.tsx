@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Upload, Loader2, FileSpreadsheet, FileCode, Check, AlertCircle } from "lucide-react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Loader2, User, Mail, IdCard, Hash, CheckCircle2, UserX, Lock, ArrowLeftRight, GraduationCap } from "lucide-react";
+
 import {
   DialogContent,
   DialogDescription,
@@ -9,8 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -18,235 +30,242 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
+import { Student, Status } from "@/lib/types/students";
 import { cn } from "@/lib/utils";
-import { Status } from "@/lib/types/students";
 
-interface ImportDialogProps {
+const studentSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  registration: z.string().min(1, "Matrícula é obrigatória"),
+  cpf: z.string().optional(),
+  email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  class_id: z.string().min(1, "Turma é obrigatória"),
+  // Precisa bater com o tipo `Status` de @/lib/types/students (fonte da verdade):
+  // "ativo" | "trancado" | "formado" | "evadido" | "transferido".
+  status: z.enum(["ativo", "trancado", "formado", "evadido", "transferido"]),
+});
+
+type StudentFormValues = z.infer<typeof studentSchema>;
+
+interface StudentFormDialogProps {
+  editing?: Student | null;
   classes: Array<{ id: string; label: string }>;
   defaultClassId?: string;
-  // cpf/email seguem o tipo de Student: obrigatórios como chave, mas aceitam null como valor.
-  onImport: (rows: Array<{ name: string; registration: string; cpf: string | null; email: string | null; class_id: string; status: Status }>) => void;
+  // Formato já normalizado: cpf/email como string | null (nunca undefined),
+  // pronto para ir direto para saveStudentAction.
+  onSubmit: (values: Omit<Student, "id"> & { id?: string }) => void;
   pending: boolean;
 }
 
-export function ImportDialog({
+const STATUS_CARDS = [
+  { value: "ativo", label: "Ativo", icon: CheckCircle2, activeColor: "border-emerald-500/50 bg-emerald-500/10 text-emerald-500" },
+  { value: "trancado", label: "Trancado", icon: Lock, activeColor: "border-amber-500/50 bg-amber-500/10 text-amber-500" },
+  { value: "formado", label: "Formado", icon: GraduationCap, activeColor: "border-purple-500/50 bg-purple-500/10 text-purple-500" },
+  { value: "evadido", label: "Evadido", icon: UserX, activeColor: "border-rose-500/50 bg-rose-500/10 text-rose-500" },
+  { value: "transferido", label: "Transferido", icon: ArrowLeftRight, activeColor: "border-blue-500/50 bg-blue-500/10 text-blue-500" },
+] as const;
+
+export function StudentFormDialog({
+  editing,
   classes,
   defaultClassId,
-  onImport,
+  onSubmit,
   pending,
-}: ImportDialogProps) {
-  const [importType, setImportType] = useState<"csv" | "json">("csv");
-  const [selectedClassId, setSelectedClassId] = useState<string>(defaultClassId ?? "");
-  const [fileContent, setFileContent] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+}: StudentFormDialogProps) {
+  const form = useForm<StudentFormValues>({
+    resolver: zodResolver(studentSchema),
+    defaultValues: {
+      id: editing?.id,
+      name: editing?.name ?? "",
+      registration: editing?.registration ?? "",
+      cpf: editing?.cpf ?? "",
+      email: editing?.email ?? "",
+      class_id: editing?.class_id ?? defaultClassId ?? "",
+      status: editing?.status ?? "ativo",
+    },
+  });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setFileName(file.name);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setFileContent(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleProcessImport = () => {
-    if (!selectedClassId) {
-      toast.error("Selecione a turma de destino.");
-      return;
+  useEffect(() => {
+    if (editing) {
+      form.reset({
+        id: editing.id,
+        name: editing.name,
+        registration: editing.registration,
+        cpf: editing.cpf ?? "",
+        email: editing.email ?? "",
+        class_id: editing.class_id,
+        status: editing.status,
+      });
     }
+  }, [editing, form]);
 
-    if (!fileContent) {
-      toast.error("Selecione um arquivo válido para importar.");
-      return;
-    }
-
-    try {
-      let rows: Array<{ name: string; registration: string; cpf: string | null; email: string | null; class_id: string; status: Status }> = [];
-
-      if (importType === "csv") {
-        const lines = fileContent.split(/\r?\n/).filter((line) => line.trim() !== "");
-        if (lines.length <= 1) {
-          toast.error("O arquivo CSV precisa conter ao menos uma linha de dados.");
-          return;
-        }
-
-        const separator = lines[0].includes(";") ? ";" : ",";
-        rows = lines.slice(1).map((line) => {
-          const cols = line.split(separator).map((c) => c.trim().replace(/^["']|["']$/g, ""));
-          return {
-            registration: cols[0] ?? "",
-            name: cols[1] ?? "",
-            cpf: cols[2] || null,
-            email: cols[3] || null,
-            class_id: selectedClassId,
-            // Todo aluno importado entra como "ativo" por padrão; o status
-            // pode ser alterado individualmente depois pela tela de Alunos.
-            status: "ativo" as Status,
-          };
-        }).filter((r) => r.name && r.registration);
-      } else {
-        const parsed = JSON.parse(fileContent);
-        const list = Array.isArray(parsed) ? parsed : [parsed];
-        rows = list.map((item: any) => ({
-          registration: String(item.registration || item.matricula || ""),
-          name: String(item.name || item.nome || ""),
-          cpf: item.cpf ? String(item.cpf) : null,
-          email: item.email ? String(item.email) : null,
-          class_id: selectedClassId,
-          // Usa o status do arquivo se vier preenchido (ex: "trancado"),
-          // senão cai no padrão "ativo". A validação final do valor
-          // acontece no servidor (actions.ts).
-          status: (item.status as Status) || ("ativo" as Status),
-        })).filter((r) => r.name && r.registration);
-      }
-
-      if (rows.length === 0) {
-        toast.error("Nenhum registro válido de aluno com 'matrícula' e 'nome' foi identificado.");
-        return;
-      }
-
-      onImport(rows);
-    } catch (e) {
-      toast.error("Falha ao ler a estrutura do arquivo. Verifique a formatação do arquivo enviado.");
-    }
-  };
+  const currentStatus = form.watch("status");
 
   return (
-    <DialogContent className="sm:max-w-[480px] overflow-hidden p-0 gap-0 border-border/80 shadow-2xl">
+    <DialogContent className="sm:max-w-[500px] overflow-hidden p-0 gap-0 border-border/80 shadow-2xl">
       <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-card">
         <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-          <Upload className="h-4 w-4 text-primary" />
-          Importação em Lote de Alunos
+          <User className="h-4 w-4 text-primary" />
+          {editing ? "Editar Dados do Aluno" : "Cadastrar Novo Aluno"}
         </DialogTitle>
         <DialogDescription className="text-xs text-muted-foreground">
-          Envie registros estruturados para cadastrar múltiplos estudantes na turma desejada.
+          {editing
+            ? "Atualize as informações cadastrais e o status da matrícula."
+            : "Preencha os dados abaixo para vincular o estudante à turma."}
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-4 p-6 bg-card/40">
-        {/* Seletor do Formato de Importação (Cards em Grid) */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Formato do Arquivo</Label>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit((v) =>
+            onSubmit({
+              id: v.id,
+              name: v.name,
+              registration: v.registration,
+              // "" -> null aqui, pois Student.cpf/email são string | null, nunca undefined/"".
+              cpf: v.cpf ? v.cpf : null,
+              email: v.email ? v.email : null,
+              class_id: v.class_id,
+              status: v.status,
+            })
+          )}
+          className="space-y-4 p-6 bg-card/40"
+        >
+          {/* Nome Completo */}
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-xs font-medium">Nome Completo</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Ex: João da Silva" className="pl-9 text-xs h-9" {...field} />
+                  </div>
+                </FormControl>
+                <FormMessage className="text-[10px]" />
+              </FormItem>
+            )}
+          />
+
+          {/* Matrícula e CPF */}
           <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setImportType("csv");
-                setFileContent(null);
-                setFileName("");
-              }}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
-                importType === "csv"
-                  ? "border-emerald-500/50 bg-emerald-500/10 text-foreground shadow-2xs"
-                  : "border-border/60 bg-background/40 hover:bg-muted/40 text-muted-foreground"
+            <FormField
+              control={form.control}
+              name="registration"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-medium">Matrícula</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="20261001" className="pl-9 text-xs h-9 font-mono" {...field} />
+                    </div>
+                  </FormControl>
+                  <FormMessage className="text-[10px]" />
+                </FormItem>
               )}
-            >
-              <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-500">
-                <FileSpreadsheet className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold">Planilha CSV</p>
-                <p className="text-[10px] text-muted-foreground">Matrícula; Nome; CPF; Email</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setImportType("json");
-                setFileContent(null);
-                setFileName("");
-              }}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
-                importType === "json"
-                  ? "border-amber-500/50 bg-amber-500/10 text-foreground shadow-2xs"
-                  : "border-border/60 bg-background/40 hover:bg-muted/40 text-muted-foreground"
-              )}
-            >
-              <div className="p-2 rounded-lg bg-amber-500/20 text-amber-500">
-                <FileCode className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold">Objetos JSON</p>
-                <p className="text-[10px] text-muted-foreground">Array de objetos em texto</p>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* Seleção da Turma de Destino (Com Truncamento Seguro) */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Turma de Destino</Label>
-          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-            <SelectTrigger className="w-full text-xs h-9 bg-background/50 truncate">
-              <SelectValue placeholder="Selecione a turma para vincular os alunos" className="truncate" />
-            </SelectTrigger>
-            <SelectContent className="max-w-[440px]">
-              {classes.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-xs truncate">
-                  <span className="truncate block max-w-[400px]">{c.label}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Dropzone de Upload Elegante */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Upload do Arquivo</Label>
-          <label className={cn(
-            "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-all p-4 text-center",
-            fileName
-              ? "border-primary/50 bg-primary/5"
-              : "border-border/80 bg-background/30 hover:bg-muted/30"
-          )}>
-            <div className="flex flex-col items-center justify-center">
-              <Upload className={cn("h-7 w-7 mb-2 transition-transform", fileName ? "text-primary scale-110" : "text-muted-foreground")} />
-              {fileName ? (
-                <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                  <Check className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="truncate max-w-[320px]">{fileName}</span>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs font-medium text-foreground">
-                    Clique para selecionar ou arraste o arquivo aqui
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Suporta arquivos estritamente formatados em .{importType.toUpperCase()}
-                  </p>
-                </>
-              )}
-            </div>
-            <input
-              type="file"
-              accept={importType === "csv" ? ".csv" : ".json"}
-              className="hidden"
-              onChange={handleFileChange}
             />
-          </label>
-        </div>
 
-        <DialogFooter className="pt-3 border-t border-border/40">
-          <Button
-            size="sm"
-            onClick={handleProcessImport}
-            disabled={pending || !fileContent || !selectedClassId}
-            className="w-full sm:w-auto"
-          >
-            {pending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-            Iniciar Importação
-          </Button>
-        </DialogFooter>
-      </div>
+            <FormField
+              control={form.control}
+              name="cpf"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-medium">CPF (opcional)</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <IdCard className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="000.000.000-00" className="pl-9 text-xs h-9 font-mono" {...field} />
+                    </div>
+                  </FormControl>
+                  <FormMessage className="text-[10px]" />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* E-mail */}
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-xs font-medium">E-mail (opcional)</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input type="email" placeholder="aluno@exemplo.com" className="pl-9 text-xs h-9" {...field} />
+                  </div>
+                </FormControl>
+                <FormMessage className="text-[10px]" />
+              </FormItem>
+            )}
+          />
+
+          {/* Seleção da Turma (com Truncate Seguro) */}
+          <FormField
+            control={form.control}
+            name="class_id"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <FormLabel className="text-xs font-medium">Turma de Destino</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="w-full text-xs h-9 bg-background/50 truncate">
+                      <SelectValue placeholder="Selecione uma turma" className="truncate" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent className="max-w-[450px]">
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs truncate">
+                        <span className="truncate block max-w-[400px]">{c.label}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage className="text-[10px]" />
+              </FormItem>
+            )}
+          />
+
+          {/* Status em Seletor de Cards Interativos */}
+          <div className="space-y-1.5 pt-1">
+            <FormLabel className="text-xs font-medium">Status da Matrícula</FormLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {STATUS_CARDS.map((card) => {
+                const Icon = card.icon;
+                const isSelected = currentStatus === card.value;
+
+                return (
+                  <button
+                    key={card.value}
+                    type="button"
+                    onClick={() => form.setValue("status", card.value as Status)}
+                    className={cn(
+                      "flex items-center gap-2 p-2 rounded-lg border text-left text-xs transition-all",
+                      isSelected
+                        ? cn("font-semibold shadow-2xs", card.activeColor)
+                        : "border-border/60 bg-background/40 hover:bg-muted/50 text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{card.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-border/40">
+            <Button type="submit" size="sm" disabled={pending} className="w-full sm:w-auto">
+              {pending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              {editing ? "Salvar Alterações" : "Cadastrar Aluno"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Form>
     </DialogContent>
   );
 }

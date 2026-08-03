@@ -40,8 +40,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-import { Course } from "@/lib/types/subjects";
-import { SubjectFormDialog } from "@/components/subject-form-dialog";
+import type { Course } from "../types";
+import { SubjectFormDialog } from "@/app/(dashboard)/disciplinas/components/subject-form-dialog";
 import {
   saveSubjectAction,
   saveSubjectsBulkAction,

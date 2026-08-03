@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Course, Period, Subject, SubjectInput } from "@/lib/types/subjects";
+import type {
+  Course,
+  Period,
+  ExtendedSubject,
+  SubjectInput,
+} from "../types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +28,7 @@ import {
 import { toast } from "sonner";
 
 type Props = {
-  editing: Subject | null;
+  editing: ExtendedSubject | null;
   courses: Course[];
   periods?: Period[];
   defaultCourseId?: string;

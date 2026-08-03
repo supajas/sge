@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { previewInviteAction, redeemInviteAction } from "@/lib/actions/invites";
 import { useSession } from "@/lib/session";
+import type { AppRole } from "@/lib/roles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -176,7 +177,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          redeem.mutate({ code, role: role || null, polo_ids: polos });
+          redeem.mutate({ code, role: role === "" ? undefined : role, polo_ids: polos, });
         }}
         className="mt-6 space-y-4 text-left"
       >

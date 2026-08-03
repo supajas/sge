@@ -129,8 +129,14 @@ export default function DashboardPage() {
       <PageHeader
         title={
           <div className="flex items-center gap-3">
-            <span>Olá, {userName}</span>
-            <Badge variant="secondary" className="font-normal text-xs bg-accent/60 text-muted-foreground">
+            <h1 className="text-lg font-semibold tracking-tight">
+              Olá, {userName}
+            </h1>
+
+            <Badge
+              variant="secondary"
+              className="font-normal text-xs bg-accent/60 text-muted-foreground"
+            >
               {userRole}
             </Badge>
           </div>

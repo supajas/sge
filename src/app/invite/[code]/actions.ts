@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function previewInviteAction(code: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const codeUpper = code.trim().toUpperCase();
   const { data: inv } = await supabase
     .from("invites")
@@ -48,7 +48,7 @@ export async function previewInviteAction(code: string) {
 }
 
 export async function redeemInviteAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

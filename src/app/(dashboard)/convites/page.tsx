@@ -63,7 +63,7 @@ import {
 import { createInviteAction, updateInviteAction } from "./actions";
 import { Checkbox } from "@/components/ui/checkbox";
 
-type Invite = ReturnType<typeof useQuery<Awaited<ReturnType<typeof fetchInvites>>>>["data"][0];
+type Invite = Awaited<ReturnType<typeof fetchInvites>>[number];
 
 async function fetchInvites(institutionId: string) {
   const { data, error } = await supabase
@@ -333,7 +333,7 @@ export default function ConvitesPage() {
                             <InviteActions
                               invite={i}
                               active={active}
-                              tenantName={tenant.active?.name}
+                              tenantName={tenant.active?.institutionName}
                               onEdit={() => setEditingInvite(i)}
                               onDelete={() => del.mutate(i.id)}
                               iconOnly

@@ -19,11 +19,27 @@ export async function GET(request: Request) {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-              response.cookies.set(name, value, options);
-            });
+          setAll(
+            cookiesToSet: Parameters<
+              NonNullable<
+                NonNullable<Parameters<typeof createServerClient>[2]>["cookies"]["setAll"]
+              >
+            >[0]
+          ) {
+            cookiesToSet.forEach(
+              ({
+                name,
+                value,
+                options,
+              }: {
+                name: string;
+                value: string;
+                options?: Parameters<typeof cookieStore.set>[2];
+              }) => {
+                cookieStore.set(name, value, options);
+                response.cookies.set(name, value, options);
+              }
+            );
           },
         },
       }

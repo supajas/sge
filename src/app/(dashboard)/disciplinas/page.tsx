@@ -11,7 +11,7 @@ import { PageBody, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { Course } from "@/lib/types/subjects";
+import type { Course } from "./types";
 import { Period } from "./types";
 import { DisciplinasContextSelector } from "./components/disciplinas-context";
 import { DisciplinasList } from "./components/disciplinas-list";

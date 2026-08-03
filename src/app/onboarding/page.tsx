@@ -415,7 +415,10 @@ function InviteForm() {
                 disabled={!canSubmit || redeemMut.isPending}
                 onClick={() => redeemMut.mutate({
                   code,
-                  role: previewData?.found && previewData.needsRole ? (chosenRole || null) : null,
+                  role:
+                    previewData?.found && previewData.needsRole
+                      ? chosenRole || undefined
+                      : undefined,
                   polo_ids: previewData?.found && previewData.needsPolo ? chosenPolos : [],
                 })}
               >
@@ -447,7 +450,7 @@ function InviteForm() {
           <Button
             className="w-full"
             disabled={!code || previewMut.isPending}
-            onClick={() => previewMut.mutate({ code })}
+            onClick={() => previewMut.mutate(code)}
           >
             {previewMut.isPending ? "Validando..." : "Continuar"}
           </Button>

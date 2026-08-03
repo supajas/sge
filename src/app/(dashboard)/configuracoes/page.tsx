@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { isAdminLike } from "@/lib/roles";
@@ -121,7 +121,6 @@ const generalSchema = z.object({
 
 function GeneralSettings() {
   const tenant = useTenant();
-  const qc = useQueryClient();
 
   const canAdmin = tenant.active ? isAdminLike(tenant.active.role) : false;
 
@@ -154,7 +153,10 @@ function GeneralSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["memberships", tenant.user?.id] });
+      // tenant.refetch() já refaz a query interna de memberships do
+      // TenantProvider. useTenant() não expõe o userId aqui fora pra montar
+      // a mesma queryKey (["memberships", userId]) manualmente, então não
+      // há necessidade (nem como) invalidar por fora — o refetch cobre isso.
       tenant.refetch();
       setTimeout(() => toast.success("Configurações salvas com sucesso."), 0);
     },
@@ -430,7 +432,8 @@ function DangerZone() {
   const router = useRouter();
   const [confirmName, setConfirmName] = useState("");
 
-  const targetName = tenant.active?.name ?? "";
+  // Correção: ActiveTenant/TenantMembership tem `institutionName`, não `name`.
+  const targetName = tenant.active?.institutionName ?? "";
   const isMatch = confirmName.trim() === targetName.trim();
 
   const deleteMut = useMutation({

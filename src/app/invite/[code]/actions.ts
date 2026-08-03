@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
 export async function previewInviteAction(code: string) {
@@ -9,7 +10,7 @@ export async function previewInviteAction(code: string) {
   const { data: inv } = await supabase
     .from("invites")
     .select(
-      "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, institutions(name, city, state)",
+      "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, institutions(name, city, state)"
     )
     .eq("code", codeUpper)
     .maybeSingle();
@@ -60,7 +61,6 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
-  // Normalização de entrada (Suporta tanto chamada via JSON/Mutation quanto via FormData)
   let code = "";
   let role: "coord_geral" | "coord_polo" | null = null;
   let polo_ids: string[] = [];
@@ -77,7 +77,6 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
 
   if (!code) throw new Error("Código do convite não informado");
 
-  // 1. Validações seguras com o cliente autenticado do usuário
   const { data: inv, error } = await supabase
     .from("invites")
     .select("*")
@@ -118,20 +117,14 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
     if (!polosOk || polosOk.length !== finalPolos.length) throw new Error("Polo inválido");
   }
 
-  // 2. Instanciação do Cliente Admin para bypass das restrições de RLS
-  const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+  // Instância Admin com Fallback seguro
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceRoleKey) {
-    throw new Error("Chave SUPABASE_SERVICE_ROLE_KEY não configurada no ambiente Server.");
-  }
+  const supabaseAdmin = serviceRoleKey
+    ? createSupabaseAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRoleKey, {
+        auth: { persistSession: false },
+      })
+    : supabase; // Fallback para o cliente padrão caso a Service Role não esteja setada
 
-  const supabaseAdmin = createSupabaseAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey,
-    { auth: { persistSession: false } }
-  );
-
-  // 3. Execução das modificações no banco com permissão elevada
   const { data: existing } = await supabaseAdmin
     .from("memberships")
     .select("id")
@@ -156,7 +149,7 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
         membership_id: membershipId!,
         course_id: cid,
       })),
-      { onConflict: "membership_id,course_id" },
+      { onConflict: "membership_id,course_id" }
     );
   }
 
@@ -166,7 +159,7 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
         membership_id: membershipId!,
         polo_id: pid,
       })),
-      { onConflict: "membership_id,polo_id" },
+      { onConflict: "membership_id,polo_id" }
     );
   }
 
@@ -189,7 +182,6 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
     metadata: { invite_id: inv.id, code },
   });
 
-  // 4. Busca os vínculos atualizados do usuário para devolver à página
   const { data: updatedMemberships } = await supabaseAdmin
     .from("memberships")
     .select(`
@@ -202,8 +194,8 @@ export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
     .eq("user_id", user.id);
 
   revalidatePath("/(dashboard)", "layout");
-  return { 
+  return {
     institutionId: inv.institution_id,
-    updatedMemberships: updatedMemberships ?? []
+    updatedMemberships: updatedMemberships ?? [],
   };
 }

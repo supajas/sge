@@ -53,7 +53,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
       if (data?.institutionId) {
         const userId = session?.user?.id;
         if (data.updatedMemberships && userId) {
-          // Manually construct the cache shape expected by useTenant's query
+          // ok Manually construct the cache shape expected by useTenant's query
           const poloIdsByMembership: Record<string, string[]> = {};
           for (const m of data.updatedMemberships) {
             poloIdsByMembership[m.id] = (m.coordinator_polos ?? []).map(

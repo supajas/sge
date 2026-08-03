@@ -30,7 +30,7 @@ function Center({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function InvitePage({ params }: { params: { code: string } }) {
+export default function InvitePage({ params }: { params: Promise<{ code: string }> }) {
   const resolvedParams = use(params);
   const code = resolvedParams.code;
 

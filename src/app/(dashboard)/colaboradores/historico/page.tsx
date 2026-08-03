@@ -1,6 +1,7 @@
 "use client";
 
-import { createFileRoute, Link, redirect } from "next/navigation";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { useActiveTenant } from "@/lib/tenant";
@@ -10,10 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft } from "lucide-react";
-
-export const Route = createFileRoute("/_authenticated/colaboradores/historico")({
-  component: HistoryPage,
-});
 
 type ActionType = "invite_redeemed" | "role_changed" | "polos_changed" | "bindings_changed" | "removed";
 
@@ -45,29 +42,35 @@ type Row = {
   newPolos: string[];
 };
 
-export default function Page() {
+export default function HistoryPage() {
   const active = useActiveTenant();
-  if (!isAdminLike(active.role)) {
-    throw redirect({ to: "/colaboradores" });
+
+  if (active && !isAdminLike(active.role)) {
+    redirect("/colaboradores");
   }
 
   const { data = [], isLoading } = useQuery<Row[]>({
-    queryKey: ["approval-history", active.institutionId],
+    queryKey: ["approval-history", active?.institutionId],
     queryFn: async () => {
+      if (!active?.institutionId) return [];
+
       const { data, error } = await supabase
         .from("approval_history")
         .select("id, action, created_at, actor_user_id, target_user_id, previous_role, new_role, previous_polo_ids, new_polo_ids")
         .eq("institution_id", active.institutionId)
         .order("created_at", { ascending: false })
         .limit(200);
+
       if (error) throw error;
       const rows = data ?? [];
+
       const userIds = Array.from(
         new Set(rows.flatMap((r) => [r.actor_user_id, r.target_user_id]).filter((x): x is string => !!x)),
       );
       const poloIds = Array.from(
         new Set(rows.flatMap((r) => [...(r.previous_polo_ids ?? []), ...(r.new_polo_ids ?? [])])),
       );
+
       const [profilesRes, polosRes] = await Promise.all([
         userIds.length
           ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
@@ -76,10 +79,13 @@ export default function Page() {
           ? supabase.from("polos").select("id, name").in("id", poloIds)
           : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       ]);
+
       const nameById: Record<string, string> = {};
       for (const p of profilesRes.data ?? []) nameById[p.id] = p.full_name ?? p.email ?? "—";
+
       const poloById: Record<string, string> = {};
       for (const p of polosRes.data ?? []) poloById[p.id] = p.name;
+
       return rows.map((r) => ({
         id: r.id,
         action: r.action as ActionType,
@@ -92,6 +98,7 @@ export default function Page() {
         newPolos: (r.new_polo_ids ?? []).map((id: string) => poloById[id] ?? "?"),
       }));
     },
+    enabled: !!active?.institutionId,
   });
 
   return (
@@ -101,7 +108,7 @@ export default function Page() {
         description="Convites aceitos e alterações de acesso feitas pela equipe."
         actions={
           <Button variant="outline" asChild>
-            <Link to="/colaboradores">
+            <Link href="/colaboradores">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar
             </Link>
@@ -123,11 +130,15 @@ export default function Page() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Carregando...</TableCell>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Carregando...
+                  </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Nenhum evento ainda.</TableCell>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Nenhum evento ainda.
+                  </TableCell>
                 </TableRow>
               ) : (
                 data.map((r) => (

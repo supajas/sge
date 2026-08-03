@@ -41,12 +41,26 @@ async function authorizeMember(supabase: ReturnType<typeof createClient>, instit
 }
 
 
+// E-mail é opcional: o formulário manda "" quando o campo fica em branco, então
+// validamos o formato apenas quando algo foi de fato preenchido, e normalizamos
+// "" / undefined para null antes de ir para o banco.
+const optionalEmailSchema = z
+    .string()
+    .optional()
+    .nullable()
+    .refine((v) => !v || z.string().email().safeParse(v).success, {
+        message: "E-mail inválido",
+    })
+    .transform((v) => (v ? v : null));
+
 const studentSchema = z.object({
     id: z.string().uuid().optional(),
     registration: z.string().min(1, "Matrícula é obrigatória"),
     name: z.string().min(1, "Nome é obrigatório"),
-    cpf: z.string().nullable(),
-    email: z.string().email().nullable(),
+    cpf: z.string().optional().nullable().transform((v) => (v ? v : null)),
+    email: optionalEmailSchema,
+    // Precisa ficar em sincronia com o enum `Status` de @/lib/types/students
+    // (fonte da verdade): "ativo" | "trancado" | "formado" | "evadido" | "transferido".
     status: z.enum(["ativo", "trancado", "formado", "evadido", "transferido"]),
     class_id: z.string().uuid(),
 });
@@ -91,8 +105,9 @@ const importStudentSchema = z.array(
     z.object({
         registration: z.string().min(1),
         name: z.string().min(1),
-        cpf: z.string().optional().nullable(),
-        email: z.string().email().optional().nullable(),
+        cpf: z.string().optional().nullable().transform((v) => (v ? v : null)),
+        email: optionalEmailSchema,
+        // Mesmo enum de `studentSchema` acima — mantenha os dois sincronizados.
         status: z.enum(["ativo", "trancado", "formado", "evadido", "transferido"]).default("ativo"),
         class_id: z.string().uuid(),
     })

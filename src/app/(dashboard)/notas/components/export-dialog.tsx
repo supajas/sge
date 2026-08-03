@@ -26,13 +26,13 @@ export type ExportColumn = {
   label: string;
 };
 
-type ExportDialogProps = {
+interface ExportDialogProps {
   columns: ExportColumn[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: Record<string, any>[];
   filename?: string;
   title?: string;
-};
+}
 
 export function ExportDialog({
   columns,

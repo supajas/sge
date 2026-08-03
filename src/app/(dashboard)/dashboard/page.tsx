@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, BookOpen, Layers, GraduationCap, ArrowUpRight } from "lucide-react";
+import { MapPin, BookOpen, Layers, GraduationCap } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useActiveTenant } from "@/lib/tenant";
 import { useSession } from "@/lib/session";
@@ -10,20 +10,39 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ROLE_LABELS } from "@/lib/roles";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { hasPermission, Permission } from "@/config/permissions";
+import { Can } from "@/components/auth/Can";
 
 export default function DashboardPage() {
   const active = useActiveTenant();
   const { user, loading: isLoadingUser } = useSession();
+  const currentRole = active?.role;
+
+  // Checagens de permissão para otimizar as chamadas
+  const canViewPolos = hasPermission(currentRole, "view:polos");
+  const canViewCourses = hasPermission(currentRole, "view:courses");
+  const canViewClasses = hasPermission(currentRole, "view:classes");
+  const canViewStudents = hasPermission(currentRole, "view:students");
 
   const { data, isLoading: isLoadingStats } = useQuery({
-    queryKey: ["dashboard-stats", active.institutionId],
+    queryKey: ["dashboard-stats", active.institutionId, currentRole],
     queryFn: async () => {
+      // Dispara apenas as queries de tabelas que o usuário tem permissão de ver
       const [polos, courses, classes, students] = await Promise.all([
-        supabase.from("polos").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId),
-        supabase.from("courses").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId),
-        supabase.from("classes").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId),
-        supabase.from("students").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId),
+        canViewPolos
+          ? supabase.from("polos").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId)
+          : Promise.resolve({ count: 0 }),
+        canViewCourses
+          ? supabase.from("courses").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId)
+          : Promise.resolve({ count: 0 }),
+        canViewClasses
+          ? supabase.from("classes").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId)
+          : Promise.resolve({ count: 0 }),
+        canViewStudents
+          ? supabase.from("students").select("id", { count: "exact", head: true }).eq("institution_id", active.institutionId)
+          : Promise.resolve({ count: 0 }),
       ]);
+
       return {
         polos: polos.count ?? 0,
         courses: courses.count ?? 0,
@@ -31,7 +50,7 @@ export default function DashboardPage() {
         students: students.count ?? 0,
       };
     },
-    enabled: !!active.institutionId,
+    enabled: !!active.institutionId && !!currentRole,
   });
 
   // Tela de Loading Principal (Skeletons)
@@ -61,34 +80,46 @@ export default function DashboardPage() {
     );
   }
 
-  const poloCount = active.isPoloScoped ? active.scopedPoloIds.length : data?.polos;
-
-  const cards = [
+  // Definição dos cards acompanhados da permissão exigida para exibição
+  const cards: Array<{
+    label: string;
+    value: number | undefined;
+    icon: React.ElementType;
+    description: string;
+    permission: Permission;
+  }> = [
     {
       label: "Polos",
-      value: poloCount,
+      value: data?.polos,
       icon: MapPin,
-      description: active.isPoloScoped ? "Polos atribuídos" : "Polos ativos",
+      description: currentRole === "coord_polo" ? "Polos atribuídos" : "Cadastrados na instituição",
+      permission: "view:polos",
     },
     {
       label: "Cursos",
       value: data?.courses,
       icon: BookOpen,
       description: "Cadastrados no sistema",
+      permission: "view:courses",
     },
     {
       label: "Turmas",
       value: data?.classes,
       icon: Layers,
       description: "Em andamento ou abertas",
+      permission: "view:classes",
     },
     {
       label: "Alunos",
       value: data?.students,
       icon: GraduationCap,
       description: "Matriculados na instituição",
+      permission: "view:students",
     },
   ];
+
+  // Filtra dinamicamente para renderizar no grid apenas os cards permitidos para o perfil logado
+  const visibleCards = cards.filter((c) => hasPermission(currentRole, c.permission));
 
   const userName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "Usuário";
   const userRole = ROLE_LABELS[active.role] ?? active.role;
@@ -109,7 +140,7 @@ export default function DashboardPage() {
 
       <PageBody>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map((c, index) => (
+          {visibleCards.map((c, index) => (
             <Card
               key={c.label}
               className="group relative overflow-hidden border-border/50 bg-card/60 transition-all duration-300 hover:border-primary/40 hover:bg-card hover:shadow-md hover:shadow-primary/5"
@@ -133,8 +164,10 @@ export default function DashboardPage() {
                   <span className="text-3xl font-bold tracking-tight text-foreground">
                     {isLoadingStats ? (
                       <Skeleton className="h-8 w-16" />
+                    ) : typeof c.value === "number" ? (
+                      c.value.toLocaleString("pt-BR")
                     ) : (
-                      typeof c.value === "number" ? c.value.toLocaleString("pt-BR") : (c.value ?? "—")
+                      c.value ?? "—"
                     )}
                   </span>
                 </div>

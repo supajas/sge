@@ -36,7 +36,9 @@ type Field = {
   max_value: number;
   order_index: number;
 };
+
 type Student = { id: string; name: string; registration: string | null };
+
 type Grade = {
   student_id: string;
   template_field_id: string;
@@ -71,7 +73,7 @@ export function StepGrades({
   classId: string;
   subjectId: string;
   institutionId: string;
-  userRole: "owner" | "admin" | "coord_geral" | "coord_polo" | "user";
+  userRole: string;
   onBack: () => void;
 }) {
   const qc = useQueryClient();
@@ -106,12 +108,15 @@ export function StepGrades({
           .eq("class_id", classId)
           .eq("subject_id", subjectId),
       ]);
+
       if (tpl.error) throw tpl.error;
       if (students.error) throw students.error;
       if (grades.error) throw grades.error;
+
       const fields = ((tpl.data?.grade_template_fields ?? []) as Field[])
         .slice()
         .sort((a, b) => a.order_index - b.order_index);
+
       return {
         isForbidden: false,
         fields,

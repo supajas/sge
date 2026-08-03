@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-import { Course, Subject } from "@/lib/types/subjects";
+import { Course } from "@/lib/types/subjects";
 import { SubjectFormDialog } from "@/components/subject-form-dialog";
 import {
   saveSubjectAction,
@@ -48,17 +48,8 @@ import {
   deleteSubjectAction,
   toggleSubjectVisibilityAction,
   toggleAllSubjectsVisibilityAction,
-} from "./actions";
-
-type Period = { id: string; name: string; is_active: boolean };
-
-interface DisciplinasListProps {
-  cursoId: string;
-  periodoId: string;
-  canEdit: boolean;
-  courses: Course[];
-  periods?: Period[];
-}
+} from "../actions";
+import { ExtendedSubject, DisciplinasListProps } from "../types";
 
 export function DisciplinasList({
   cursoId,
@@ -70,9 +61,9 @@ export function DisciplinasList({
   const tenant = useTenant();
   const qc = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Subject | null>(null);
+  const [editing, setEditing] = useState<ExtendedSubject | null>(null);
 
-  const { data: rawSubjects = [], isLoading } = useQuery({
+  const { data: rawSubjects = [], isLoading } = useQuery<ExtendedSubject[]>({
     queryKey: ["subjects", tenant.active?.institutionId, cursoId, periodoId],
     queryFn: async () => {
       if (!tenant.active || !cursoId || !periodoId) return [];
@@ -86,7 +77,7 @@ export function DisciplinasList({
         .order("name");
 
       if (error) throw error;
-      return data as (Subject & { period_id?: string | null })[];
+      return (data ?? []) as ExtendedSubject[];
     },
     enabled: !!tenant.active && !!cursoId && !!periodoId,
   });
@@ -109,7 +100,7 @@ export function DisciplinasList({
 
   const saveBulk = useMutation({
     mutationFn: saveSubjectsBulkAction,
-    onSuccess: (res) => {
+    onSuccess: (res: { count: number }) => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       setFormOpen(false);
       setTimeout(() => toast.success(`${res.count} disciplinas importadas com sucesso!`), 0);
@@ -118,7 +109,7 @@ export function DisciplinasList({
   });
 
   const del = useMutation({
-    mutationFn: deleteSubjectAction,
+    mutationFn: (id: string) => deleteSubjectAction(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       setTimeout(() => toast.success("Disciplina excluída com sucesso."), 0);
@@ -127,7 +118,8 @@ export function DisciplinasList({
   });
 
   const toggleVisibility = useMutation({
-    mutationFn: toggleSubjectVisibilityAction,
+    mutationFn: (vars: { id: string; is_active: boolean }) =>
+      toggleSubjectVisibilityAction(vars),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       setTimeout(() => {
@@ -138,7 +130,8 @@ export function DisciplinasList({
   });
 
   const toggleAll = useMutation({
-    mutationFn: toggleAllSubjectsVisibilityAction,
+    mutationFn: (vars: { course_id: string; period_id: string; is_active: boolean }) =>
+      toggleAllSubjectsVisibilityAction(vars),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["subjects"] });
       setTimeout(() => {
@@ -154,8 +147,8 @@ export function DisciplinasList({
 
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
 
-  const allVisible = data.length > 0 && data.every((s) => s.is_active !== false);
-  const allHidden = data.length > 0 && data.every((s) => s.is_active === false);
+  const allVisible = rawSubjects.length > 0 && rawSubjects.every((s) => s.is_active !== false);
+  const allHidden = rawSubjects.length > 0 && rawSubjects.every((s) => s.is_active === false);
 
   return (
     <div className="space-y-4">
@@ -167,7 +160,7 @@ export function DisciplinasList({
               size="sm"
               variant="outline"
               className="h-8 text-xs shadow-2xs"
-              disabled={data.length === 0 || allVisible || toggleAll.isPending}
+              disabled={rawSubjects.length === 0 || allVisible || toggleAll.isPending}
               onClick={() =>
                 toggleAll.mutate({
                   course_id: cursoId,
@@ -184,7 +177,7 @@ export function DisciplinasList({
               size="sm"
               variant="outline"
               className="h-8 text-xs shadow-2xs"
-              disabled={data.length === 0 || allHidden || toggleAll.isPending}
+              disabled={rawSubjects.length === 0 || allHidden || toggleAll.isPending}
               onClick={() =>
                 toggleAll.mutate({
                   course_id: cursoId,
@@ -232,7 +225,7 @@ export function DisciplinasList({
             <Skeleton key={i} className="h-32 w-full rounded-xl" />
           ))
         ) : data.length === 0 ? (
-          <EmptySubjectsState />
+          <EmptySubjectsState hasHiddenSubjects={rawSubjects.length > 0} />
         ) : (
           data.map((s) => (
             <Card
@@ -339,8 +332,8 @@ export function DisciplinasList({
               ))
             ) : data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canEdit ? 4 : 2} className="py-12">
-                  <EmptySubjectsState />
+                <TableCell colSpan={canEdit ? 4 : 2} className="py-8">
+                  <EmptySubjectsState hasHiddenSubjects={rawSubjects.length > 0} />
                 </TableCell>
               </TableRow>
             ) : (
@@ -435,9 +428,17 @@ export function DisciplinasList({
   );
 }
 
-function EmptySubjectsState() {
+function EmptySubjectsState({ hasHiddenSubjects }: { hasHiddenSubjects?: boolean }) {
+  if (hasHiddenSubjects) {
+    return (
+      <div className="text-center text-xs text-amber-600 dark:text-amber-400 py-3 px-3 rounded-md bg-amber-500/10 border border-amber-500/20 max-w-lg mx-auto">
+        Não há disciplinas ativas ou visíveis cadastradas para este período letivo.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
+    <div className="flex flex-col items-center justify-center py-6 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 mb-3">
         <Library className="h-6 w-6" />
       </div>

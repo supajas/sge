@@ -18,9 +18,11 @@ export type TenantMembership = {
 };
 
 export type ActiveTenant = TenantMembership & {
-  /** Polos aos quais o usuário está vinculado. Para owner/admin/coord_geral fica vazio (irrestrito). */
+  /** Cursos vinculados ao membro via membership_courses. */
+  scopedCourseIds: string[];
+  /** Polos vinculados ao membro via membership_polos. */
   scopedPoloIds: string[];
-  /** true quando o papel do usuário é restrito por polos (coord_polo). */
+  /** Indica se o perfil possui restrição por polo. */
   isPoloScoped: boolean;
 };
 
@@ -29,7 +31,7 @@ type TenantContextValue = {
   active: ActiveTenant | null;
   setActive: (institutionId: string) => void;
   loading: boolean;
-  isDataLoaded: boolean; // Nova propriedade
+  isDataLoaded: boolean;
   refetch: () => void;
 };
 
@@ -43,16 +45,29 @@ export function TenantProvider({ userId, children }: { userId: string; children:
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["memberships", userId],
-    queryFn: async (): Promise<{ memberships: TenantMembership[]; poloIdsByMembership: Record<string, string[]> }> => {
+    queryFn: async (): Promise<{
+      memberships: TenantMembership[];
+      poloIdsByMembership: Record<string, string[]>;
+      courseIdsByMembership: Record<string, string[]>;
+    }> => {
       const { data, error } = await supabase
         .from("memberships")
-        .select(
-          "id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id, polos(id, name))"
-        )
+        .select(`
+          id, 
+          role, 
+          institution_id, 
+          institutions!inner(name, city, state, logo_url), 
+          membership_polos(polo_id),
+          membership_courses(course_id)
+        `)
         .eq("user_id", userId);
+
       if (error) throw error;
+
       const memberships: TenantMembership[] = [];
       const poloIdsByMembership: Record<string, string[]> = {};
+      const courseIdsByMembership: Record<string, string[]> = {};
+
       for (const m of data ?? []) {
         const inst = m.institutions as unknown as {
           name: string;
@@ -60,6 +75,7 @@ export function TenantProvider({ userId, children }: { userId: string; children:
           state: string;
           logo_url: string | null;
         };
+
         memberships.push({
           membershipId: m.id,
           institutionId: m.institution_id,
@@ -69,30 +85,49 @@ export function TenantProvider({ userId, children }: { userId: string; children:
           logoUrl: inst.logo_url,
           role: m.role as AppRole,
         });
-        poloIdsByMembership[m.id] = (m.coordinator_polos ?? []).map(
-          (c: { polo_id: string }) => c.polo_id,
+
+        // Mapeia Polos
+        const poloIds = (m.membership_polos ?? []).map(
+          (mp: { polo_id: string }) => mp.polo_id
         );
+        poloIdsByMembership[m.id] = poloIds;
+
+        // Mapeia Cursos
+        const courseIds = (m.membership_courses ?? []).map(
+          (mc: { course_id: string }) => mc.course_id
+        );
+        courseIdsByMembership[m.id] = courseIds;
       }
-      return { memberships, poloIdsByMembership };
+
+      return { memberships, poloIdsByMembership, courseIdsByMembership };
     },
+    enabled: !!userId,
   });
 
   const memberships = data?.memberships ?? [];
+
   const base =
     memberships.find((m) => m.institutionId === activeId) ??
-    (memberships.length > 0
-      ? null
-      : undefined);
+    memberships[0] ??
+    null;
+
+  useEffect(() => {
+    if (base && base.institutionId !== activeId) {
+      setActiveId(base.institutionId);
+      localStorage.setItem(STORAGE_KEY, base.institutionId);
+    }
+  }, [base, activeId]);
 
   const active: ActiveTenant | null = base
     ? {
         ...base,
         scopedPoloIds: data?.poloIdsByMembership[base.membershipId] ?? [],
-        isPoloScoped: base.role === "coord_polo",
+        scopedCourseIds: data?.courseIdsByMembership[base.membershipId] ?? [],
+        isPoloScoped: ["coord_polo", "tutor_presencial"].includes(base.role),
       }
     : null;
 
-  const isDataLoaded = !isLoading && !isFetching && data !== undefined; // Nova flag
+  const isDataLoaded = !isLoading && !isFetching && data !== undefined;
 
   return (
     <TenantContext.Provider
@@ -104,7 +139,7 @@ export function TenantProvider({ userId, children }: { userId: string; children:
           localStorage.setItem(STORAGE_KEY, id);
         },
         loading: isLoading || isFetching,
-        isDataLoaded, // Expondo a nova flag
+        isDataLoaded,
         refetch,
       }}
     >

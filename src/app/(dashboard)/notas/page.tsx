@@ -1,11 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, startTransition } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BookOpen,
-  Building2,
   Calendar,
   Check,
   ChevronRight,
@@ -31,27 +29,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/lib/supabase/client";
 import { useTenant } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
 
-import { StepGrades } from "./step-grades";
+import { StepGrades } from "./components/step-grades";
+import { useNotasFilters } from "./queries/use-notas-filters";
 
 const searchSchema = z.object({
   courseId: z.string().optional(),
-  poloId: z.string().optional(),
   classId: z.string().optional(),
   periodId: z.string().optional(),
   subjectId: z.string().optional(),
 });
 
-type Search = z.infer<typeof searchSchema>;
+type Search = z.infer<searchSchema>;
 
 function useNotasSearchParams() {
   const searchParams = useSearchParams();
   return {
     courseId: searchParams.get("courseId"),
-    poloId: searchParams.get("poloId"),
     classId: searchParams.get("classId"),
     periodId: searchParams.get("periodId"),
     subjectId: searchParams.get("subjectId"),
@@ -62,12 +58,12 @@ function NotasPageContent() {
   const tenant = useTenant();
   const router = useRouter();
   const pathname = usePathname();
-  const { courseId, poloId, classId, periodId, subjectId } = useNotasSearchParams();
+  const { courseId, classId, periodId, subjectId } = useNotasSearchParams();
 
   const handleParamChange = useCallback(
     (key: keyof Search, value: string | null) => {
       const params = new URLSearchParams(window.location.search);
-      const keys: (keyof Search)[] = ["courseId", "poloId", "classId", "periodId", "subjectId"];
+      const keys: (keyof Search)[] = ["courseId", "classId", "periodId", "subjectId"];
       const keyIndex = keys.indexOf(key);
 
       if (value) {
@@ -87,125 +83,37 @@ function NotasPageContent() {
     [pathname, router]
   );
 
-  // --- QUERIES ---
-  const { data: courses = [], isLoading: coursesLoading } = useQuery({
-    queryKey: ["notas-courses", tenant.active?.institutionId, tenant.active?.isPoloScoped, tenant.active?.scopedPoloIds],
-    queryFn: async () => {
-      if (!tenant.active) return [];
-
-      let query;
-      if (tenant.active.isPoloScoped) {
-        if (!tenant.active.scopedPoloIds || tenant.active.scopedPoloIds.length === 0) {
-          return [];
-        }
-        query = supabase
-          .from("courses")
-          .select("id, name, course_polos!inner(polo_id)")
-          .in("course_polos.polo_id", tenant.active.scopedPoloIds);
-      } else {
-        query = supabase
-          .from("courses")
-          .select("id, name")
-          .eq("institution_id", tenant.active.institutionId);
-      }
-
-      const { data, error } = await query.order("name");
-      if (error) throw error;
-
-      const uniqueCoursesMap = new Map<string, { id: string; name: string }>();
-      (data ?? []).forEach((c: any) => {
-        if (!uniqueCoursesMap.has(c.id)) {
-          uniqueCoursesMap.set(c.id, { id: c.id, name: c.name });
-        }
-      });
-
-      return Array.from(uniqueCoursesMap.values());
-    },
-    enabled: !!tenant.active,
+  const {
+    courses,
+    coursesLoading,
+    classes,
+    classesLoading,
+    periods,
+    periodsLoading,
+    subjects,
+    subjectsLoading,
+  } = useNotasFilters({
+    tenantActive: tenant.active,
+    courseId,
+    classId,
+    periodId,
   });
 
-  const { data: polos = [], isLoading: polosLoading } = useQuery({
-    queryKey: ["notas-polos", courseId],
-    queryFn: async () => {
-      if (!courseId) return [];
-      const { data, error } = await supabase
-        .from("course_polos")
-        .select("polos!inner(id, name)")
-        .eq("course_id", courseId)
-        .order("name", { foreignTable: "polos" });
-      if (error) throw error;
-      return data.map((item) => item.polos).filter(Boolean) as { id: string; name: string }[];
-    },
-    enabled: !!courseId,
-  });
+  // Checa se o período foi selecionado e se há disciplinas disponíveis
+  const hasSubjectsAvailable = !periodId || subjectsLoading || subjects.length > 0;
 
-  const { data: classes = [], isLoading: classesLoading } = useQuery({
-    queryKey: ["notas-classes", courseId, poloId],
-    queryFn: async () => {
-      if (!courseId || !poloId) return [];
-      const { data, error } = await supabase
-        .from("classes")
-        .select("id, name, period")
-        .eq("course_id", courseId)
-        .eq("polo_id", poloId)
-        .order("period", { ascending: false });
-      if (error) throw error;
-      return data.map((c) => ({ id: c.id, name: c.name, hint: c.period ?? undefined }));
-    },
-    enabled: !!courseId && !!poloId,
-  });
-
-  const { data: periods = [], isLoading: periodsLoading } = useQuery({
-    queryKey: ["notas-periods", tenant.active?.institutionId],
-    queryFn: async () => {
-      if (!tenant.active) return [];
-      const { data, error } = await supabase
-        .from("periods")
-        .select("id, name, is_active")
-        .eq("institution_id", tenant.active.institutionId)
-        .order("name", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: !!tenant.active,
-  });
-
-  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
-    queryKey: ["notas-subjects", courseId, periodId, tenant.active?.role],
-    queryFn: async () => {
-      if (!courseId || !periodId || !tenant.active) return [];
-      let query = supabase
-        .from("subjects")
-        .select("id, name, workload_hours, is_active")
-        .eq("course_id", courseId)
-        .eq("period_id", periodId);
-
-      if (tenant.active.role === "coord_polo") {
-        query = query.eq("is_active", true);
-      }
-
-      const { data, error } = await query.order("name");
-      if (error) throw error;
-      return (data ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        hint: s.workload_hours ? `${s.workload_hours}h` : undefined,
-        is_active: s.is_active,
-      }));
-    },
-    enabled: !!courseId && !!periodId && !!tenant.active,
-  });
-
+  // Monta a lista de passos dinamicamente (oculta 'disciplina' se não houver nenhuma no período)
   const STEPS = [
     { id: "curso", label: "Curso", completed: !!courseId, icon: GraduationCap },
-    { id: "polo", label: "Polo", completed: !!poloId, icon: Building2 },
     { id: "turma", label: "Turma", completed: !!classId, icon: Layers },
     { id: "periodo", label: "Período", completed: !!periodId, icon: Calendar },
-    { id: "disciplina", label: "Disciplina", completed: !!subjectId, icon: BookOpen },
+    ...(hasSubjectsAvailable
+      ? [{ id: "disciplina", label: "Disciplina", completed: !!subjectId, icon: BookOpen }]
+      : []),
   ];
 
   const currentStepIndex = STEPS.findIndex((s) => !s.completed);
-  const isFiltered = !!(courseId || poloId || classId || periodId || subjectId);
+  const isFiltered = !!(courseId || classId || periodId || subjectId);
 
   const selects = [
     {
@@ -217,46 +125,41 @@ function NotasPageContent() {
       placeholder: "Selecione um curso",
       disabled: coursesLoading,
       loading: coursesLoading,
-    },
-    {
-      id: "poloId",
-      label: "2. Polo",
-      value: poloId,
-      onValueChange: (v: string) => handleParamChange("poloId", v),
-      options: polos,
-      placeholder: courseId ? "Selecione um polo" : "Escolha um curso",
-      disabled: !courseId || polosLoading,
-      loading: polosLoading,
+      visible: true,
     },
     {
       id: "classId",
-      label: "3. Turma",
+      label: "2. Turma",
       value: classId,
       onValueChange: (v: string) => handleParamChange("classId", v),
       options: classes.map((c) => ({ id: c.id, name: c.hint ? `${c.name} (${c.hint})` : c.name })),
-      placeholder: poloId ? "Selecione uma turma" : "Escolha um polo",
-      disabled: !poloId || classesLoading,
+      placeholder: courseId ? "Selecione uma turma" : "Escolha um curso",
+      disabled: !courseId || classesLoading,
       loading: classesLoading,
+      visible: !!courseId,
     },
     {
       id: "periodId",
-      label: "4. Período Letivo",
+      label: "3. Período Letivo",
       value: periodId,
       onValueChange: (v: string) => handleParamChange("periodId", v),
       options: periods.map((p) => ({ id: p.id, name: `${p.name} ${p.is_active ? "(Ativo)" : ""}` })),
       placeholder: classId ? "Selecione um período" : "Escolha uma turma",
       disabled: !classId || periodsLoading,
       loading: periodsLoading,
+      visible: !!classId,
     },
     {
       id: "subjectId",
-      label: "5. Disciplina",
+      label: "4. Disciplina",
       value: subjectId,
       onValueChange: (v: string) => handleParamChange("subjectId", v),
       options: subjects,
       placeholder: periodId ? "Selecione uma disciplina" : "Escolha um período",
       disabled: !periodId || subjectsLoading,
       loading: subjectsLoading,
+      // Só fica visível se houver disciplinas ativas para o período selecionado
+      visible: !!periodId && (subjectsLoading || subjects.length > 0),
     },
   ];
 
@@ -325,7 +228,7 @@ function NotasPageContent() {
               )}
             </div>
 
-            {/* Stepper Visual */}
+            {/* Stepper Visual Adaptativo */}
             <ol className="pt-3 flex flex-wrap items-center gap-2 text-xs">
               {STEPS.map((step, index) => {
                 const StepIcon = step.icon;
@@ -359,50 +262,45 @@ function NotasPageContent() {
           </CardHeader>
 
           <CardContent className="pt-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              {selects.map(
-                (s) =>
-                  (STEPS[selects.indexOf(s) - 1]?.completed || selects.indexOf(s) === 0) && (
-                    <div key={s.id} className="space-y-1.5">
-                      <Label className="text-xs font-medium text-foreground">{s.label}</Label>
-                      <Select
-                        value={s.value ?? ""}
-                        onValueChange={s.onValueChange}
-                        disabled={s.disabled}
-                      >
-                        <SelectTrigger className="w-full bg-background/50 h-9 text-xs">
-                          {s.loading ? (
-                            <div className="flex items-center gap-2">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                              <span className="text-muted-foreground">Carregando...</span>
-                            </div>
-                          ) : (
-                            <SelectValue placeholder={s.placeholder} />
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {s.options.map((opt: any) => (
-                            <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                              {opt.name ?? opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )
-              )}
+            <div className="grid gap-4 md:grid-cols-4">
+              {selects
+                .filter((s) => s.visible)
+                .map((s) => (
+                  <div key={s.id} className="space-y-1.5">
+                    <Label className="text-xs font-medium text-foreground">{s.label}</Label>
+                    <Select
+                      value={s.value ?? ""}
+                      onValueChange={s.onValueChange}
+                      disabled={s.disabled}
+                    >
+                      <SelectTrigger className="w-full bg-background/50 h-9 text-xs">
+                        {s.loading ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Carregando...</span>
+                          </div>
+                        ) : (
+                          <SelectValue placeholder={s.placeholder} />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {s.options.map((opt: any) => (
+                          <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                            {opt.name ?? opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
             </div>
-            {currentStepIndex < STEPS.length &&
-              !selects[currentStepIndex]?.loading &&
-              selects[currentStepIndex]?.options.length === 0 && (
-                <div className="mt-4 text-center text-xs text-muted-foreground py-4 px-2 rounded-md bg-muted/40 border border-dashed">
-                  Nenhum item encontrado para{" "}
-                  <span className="font-semibold text-foreground">
-                    {STEPS[currentStepIndex].label}
-                  </span>{" "}
-                  com os filtros selecionados.
-                </div>
-              )}
+
+            {/* Alerta amigável apenas se um Período for escolhido, não houver disciplinas ativas e o carregamento terminou */}
+            {periodId && !subjectsLoading && subjects.length === 0 && (
+              <div className="mt-4 text-center text-xs text-amber-600 dark:text-amber-400 py-3 px-3 rounded-md bg-amber-500/10 border border-amber-500/20">
+                Não há disciplinas ativas ou visíveis cadastradas para este período letivo.
+              </div>
+            )}
           </CardContent>
         </Card>
       </PageBody>

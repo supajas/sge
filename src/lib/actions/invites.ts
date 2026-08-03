@@ -10,7 +10,7 @@ export async function previewInviteAction(code: string) {
   const { data: inv } = await supabase
     .from("invites")
     .select(
-      "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, institutions(name, city, state)",
+      "id, role, expires_at, used_at, single_use, institution_id, email, polo_ids, course_ids, institutions(name, city, state)",
     )
     .eq("code", codeUpper)
     .maybeSingle();
@@ -20,8 +20,15 @@ export async function previewInviteAction(code: string) {
   const expired = new Date(inv.expires_at).getTime() < Date.now();
 
   const invitePolos: string[] = Array.isArray(inv.polo_ids) ? (inv.polo_ids as string[]) : [];
-  const needsPolo = !invitePolos.length;
+  const inviteCourses: string[] = Array.isArray(inv.course_ids) ? (inv.course_ids as string[]) : [];
+
+  // Como role agora é obrigatório no convite, não precisamos pedir ao usuário final
   const needsRole = !inv.role;
+  const role = inv.role as AppRole;
+
+  // Checa se o papel exige e se já possui polos vinculados
+  const requiresPolo = role === "coord_polo" || role === "tutor_presencial";
+  const needsPolo = requiresPolo && !invitePolos.length;
 
   let polos: { id: string; name: string }[] = [];
   if (needsPolo) {
@@ -38,7 +45,7 @@ export async function previewInviteAction(code: string) {
     institutionName: inst?.name ?? "",
     institutionCity: inst?.city ?? "",
     institutionState: inst?.state ?? "",
-    role: (inv.role as string | null) ?? null,
+    role,
     email: inv.email,
     expired,
     used: !!inv.used_at && inv.single_use,
@@ -50,8 +57,8 @@ export async function previewInviteAction(code: string) {
 
 type RedeemInput = {
   code: string;
-  role: "coord_geral" | "coord_polo" | null;
-  polo_ids: string[];
+  role?: AppRole;
+  polo_ids?: string[];
 };
 
 export async function redeemInviteAction(input: RedeemInput) {
@@ -89,24 +96,23 @@ export async function redeemInviteAction(input: RedeemInput) {
 
   if (inv.email && user.email) {
     if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
-      throw new Error("Este convite foi enviado para outro email");
+      throw new Error("Este convite foi enviado para outro e-mail");
     }
   }
 
-  let finalRole: "admin" | "coord_geral" | "coord_polo" | null = (inv.role as any) ?? null;
+  // O papel principal vem diretamente do convite
+  const finalRole: AppRole = (inv.role as AppRole) || input.role;
   if (!finalRole) {
-    if (!input.role) throw new Error("Selecione o seu papel para continuar");
-    if (input.role !== "coord_geral" && input.role !== "coord_polo") throw new Error("Papel inválido");
-    finalRole = input.role;
+    throw new Error("Este convite não possui um papel configurado.");
   }
 
   const invitePolos: string[] = Array.isArray(inv.polo_ids) ? (inv.polo_ids as string[]) : [];
-
   const rawPolos = invitePolos.length ? invitePolos : (input.polo_ids || []);
   const finalPolos = Array.from(new Set(rawPolos.filter((id): id is string => Boolean(id && typeof id === "string"))));
 
-  if (finalRole === "coord_polo" && finalPolos.length === 0) {
-    throw new Error("Selecione ao menos um polo");
+  const requiresPolo = finalRole === "coord_polo" || finalRole === "tutor_presencial";
+  if (requiresPolo && finalPolos.length === 0) {
+    throw new Error("Selecione ao menos um polo para continuar");
   }
 
   if (finalPolos.length) {
@@ -117,11 +123,11 @@ export async function redeemInviteAction(input: RedeemInput) {
       .in("id", finalPolos);
 
     if (!polosOk || polosOk.length !== finalPolos.length) {
-      throw new Error("Polo inválido");
+      throw new Error("Polo selecionado é inválido para esta instituição");
     }
   }
 
-  // Usando supabaseAdmin para criar/atualizar a membership do usuário
+  // Criação/Atualização da Membership
   const { data: existing } = await supabaseAdmin
     .from("memberships")
     .select("id")
@@ -136,18 +142,17 @@ export async function redeemInviteAction(input: RedeemInput) {
       .insert({ user_id: user.id, institution_id: inv.institution_id, role: finalRole })
       .select("id")
       .single();
-    if (memErr || !created) throw new Error(memErr?.message ?? "Falha ao criar vínculo");
+    if (memErr || !created) throw new Error(memErr?.message ?? "Falha ao criar vínculo de membro");
     membershipId = created.id;
   } else {
-    if (finalRole) {
-      const { error: updateMemError } = await supabaseAdmin
-        .from("memberships")
-        .update({ role: finalRole })
-        .eq("id", membershipId);
-      if (updateMemError) throw new Error(updateMemError.message);
-    }
+    const { error: updateMemError } = await supabaseAdmin
+      .from("memberships")
+      .update({ role: finalRole })
+      .eq("id", membershipId);
+    if (updateMemError) throw new Error(updateMemError.message);
   }
 
+  // Vínculo com Cursos (Professor, Coordenador de Curso, Tutor a Distância)
   if (inv.course_ids?.length) {
     await supabaseAdmin.from("coordinator_courses").upsert(
       (inv.course_ids as string[]).map((cid: string) => ({
@@ -158,9 +163,7 @@ export async function redeemInviteAction(input: RedeemInput) {
     );
   }
 
-  console.log("RedeemInviteAction: finalPolos before upsert/delete:", finalPolos);
-
-  // Alterado para supabaseAdmin para evitar o erro de Row-Level Security em coordinator_polos
+  // Vínculo com Polos (Coordenador de Polo, Tutor Presencial)
   if (finalPolos.length) {
     const { error: upsertError } = await supabaseAdmin.from("coordinator_polos").upsert(
       finalPolos.map((pid: string) => ({
@@ -169,27 +172,23 @@ export async function redeemInviteAction(input: RedeemInput) {
       })),
       { onConflict: "membership_id,polo_id" },
     );
-    if (upsertError) {
-      console.error("RedeemInviteAction: Error during coordinator_polos upsert:", upsertError);
-      throw new Error(upsertError.message);
-    }
-    console.log("RedeemInviteAction: coordinator_polos upsert successful for membershipId:", membershipId, "polos:", finalPolos);
+    if (upsertError) throw new Error(upsertError.message);
   } else {
-    const { error: deleteError } = await supabaseAdmin
+    await supabaseAdmin
       .from("coordinator_polos")
       .delete()
       .eq("membership_id", membershipId!);
-    if (deleteError) {
-      console.error("RedeemInviteAction: Error during coordinator_polos delete:", deleteError);
-      throw new Error(deleteError.message);
-    }
-    console.log("RedeemInviteAction: coordinator_polos deleted for membershipId:", membershipId);
   }
 
+  // Marcar como usado
   if (inv.single_use) {
-    await supabaseAdmin.from("invites").update({ used_at: new Date().toISOString(), used_by: user.id }).eq("id", inv.id);
+    await supabaseAdmin
+      .from("invites")
+      .update({ used_at: new Date().toISOString(), used_by: user.id })
+      .eq("id", inv.id);
   }
 
+  // Histórico de auditoria
   await supabaseAdmin.from("approval_history").insert({
     institution_id: inv.institution_id,
     action: "invite_redeemed",
@@ -204,14 +203,12 @@ export async function redeemInviteAction(input: RedeemInput) {
 
   revalidatePath("/(dashboard)", "layout");
 
-  // Na leitura final para a UI, mantemos o supabase normal já que o vínculo acabou de ser gravado
   const { data: membershipsData, error: membershipsError } = await supabase
     .from("memberships")
     .select("id, role, institution_id, institutions!inner(name, city, state, logo_url), coordinator_polos(polo_id)")
     .eq("user_id", user.id);
 
   if (membershipsError) {
-    console.error("Failed to fetch updated memberships after invite redemption:", membershipsError);
     return { institutionId: inv.institution_id, updatedMemberships: null };
   }
 

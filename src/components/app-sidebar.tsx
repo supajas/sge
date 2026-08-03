@@ -2,52 +2,69 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Sparkles, ArrowRight } from "lucide-react";
 import {
-  LayoutDashboard, Mail, BookOpen, MapPin, Layers, GraduationCap,
-  UserSquare2, Settings, ClipboardList, ListChecks, PencilRuler, Sparkles, ArrowRight,
-  ChevronRight, Calendar
-} from "lucide-react";
-import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useTenant } from "@/lib/tenant";
-import { isAdminLike } from "@/lib/roles";
+import { hasPermission } from "@/config/permissions";
+import {
+  INICIO,
+  ESTRUTURA_BASE,
+  PESSOAS_BASE,
+  PESSOAS_ADMIN,
+  ADMIN_ONLY,
+  PERIODOS_ITEM,
+  NavItem,
+} from "@/config/navigation";
 
-type NavItem = { title: string; url: string; icon: React.ElementType };
+function PremiumCard() {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Link
+      href="/premium"
+      onClick={() => setOpenMobile(false)}
+      className="group relative block overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 via-background to-background p-3.5 shadow-xs transition-all duration-300 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-transform group-hover:scale-105">
+            <Sparkles className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-xs font-semibold tracking-tight text-foreground">SGE Premium</span>
+        </div>
+        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase tracking-wider">
+          PRO
+        </span>
+      </div>
 
-const INICIO: NavItem[] = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Central de Notas", url: "/notas", icon: PencilRuler },
-];
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        Desbloqueie inteligência artificial, relatórios avançados e automações.
+      </p>
 
-const ESTRUTURA: NavItem[] = [
-  { title: "Polos", url: "/polos", icon: MapPin },
-  { title: "Cursos", url: "/cursos", icon: BookOpen },
-  { title: "Turmas", url: "/turmas", icon: Layers },
-  { title: "Disciplinas", url: "/disciplinas", icon: ClipboardList },
-];
-
-const PESSOAS_BASE: NavItem[] = [
-  { title: "Alunos", url: "/alunos", icon: GraduationCap },
-];
-
-const PESSOAS_ADMIN: NavItem[] = [
-  { title: "Colaboradores", url: "/colaboradores", icon: UserSquare2 },
-];
-
-const ADMIN_ONLY: NavItem[] = [
-  { title: "Templates de Notas", url: "/templates-notas", icon: ListChecks },
-  { title: "Convites", url: "/convites", icon: Mail },
-  { title: "Configurações", url: "/configuracoes", icon: Settings },
-];
+      <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+        <span className="text-[11px] font-medium text-primary">Conhecer recursos</span>
+        <ArrowRight className="h-3.5 w-3.5 text-primary transition-transform duration-200 group-hover:translate-x-1" />
+      </div>
+    </Link>
+  );
+}
 
 export function AppSidebar() {
   const { active } = useTenant();
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
-  const admin = isAdminLike(active?.role);
+  const currentRole = active?.role;
 
   // Verificação de URL ativa mais precisa
   const isActive = (url: string) => {
@@ -55,17 +72,25 @@ export function AppSidebar() {
     return pathname === url || pathname.startsWith(`${url}/`);
   };
 
-  const estruturaItems: NavItem[] = [
-    ...ESTRUTURA.slice(0, 2), // Polos, Cursos
-    ...(admin ? [{ title: "Períodos", url: "/periodos", icon: Calendar }] : []),
-    ...ESTRUTURA.slice(2), // Turmas, Disciplinas
-  ];
+  // Função utilitária para filtrar itens conforme a permissão do usuário
+  const filterNavItems = (items: NavItem[]) => {
+    return items.filter(
+      (item) => !item.requiredPermission || hasPermission(currentRole, item.requiredPermission)
+    );
+  };
 
+  // Montagem da Estrutura Acadêmica (combina base + períodos e filtra dinamicamente)
+  const todasEstruturas: NavItem[] = [...ESTRUTURA_BASE, PERIODOS_ITEM];
+  const estruturaItems = filterNavItems(todasEstruturas);
+
+  // Agrupamento dos menus da Sidebar
   const menuGroups = [
-    { label: "Início", items: INICIO },
+    { label: "Início", items: filterNavItems(INICIO) },
     { label: "Estrutura Acadêmica", items: estruturaItems },
-    { label: "Pessoas", items: admin ? [...PESSOAS_BASE, ...PESSOAS_ADMIN] : PESSOAS_BASE },
-    ...(admin ? [{ label: "Administração", items: ADMIN_ONLY }] : []),
+    { label: "Pessoas", items: filterNavItems([...PESSOAS_BASE, ...PESSOAS_ADMIN]) },
+    ...(filterNavItems(ADMIN_ONLY).length > 0
+      ? [{ label: "Administração", items: filterNavItems(ADMIN_ONLY) }]
+      : []),
   ];
 
   return (
@@ -113,7 +138,11 @@ export function AppSidebar() {
                         }`}
                       >
                         <Link href={item.url} onClick={() => setOpenMobile(false)}>
-                          <item.icon className={`h-4 w-4 shrink-0 ${activeState ? "text-primary" : "text-muted-foreground"}`} />
+                          <item.icon
+                            className={`h-4 w-4 shrink-0 ${
+                              activeState ? "text-primary" : "text-muted-foreground"
+                            }`}
+                          />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -131,37 +160,5 @@ export function AppSidebar() {
         <PremiumCard />
       </SidebarFooter>
     </Sidebar>
-  );
-}
-
-function PremiumCard() {
-  const { setOpenMobile } = useSidebar();
-  return (
-    <Link
-      href="/premium"
-      onClick={() => setOpenMobile(false)}
-      className="group relative block overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 via-background to-background p-3.5 shadow-xs transition-all duration-300 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-transform group-hover:scale-105">
-            <Sparkles className="h-3.5 w-3.5" />
-          </div>
-          <span className="text-xs font-semibold tracking-tight text-foreground">SGE Premium</span>
-        </div>
-        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase tracking-wider">
-          PRO
-        </span>
-      </div>
-      
-      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-        Desbloqueie inteligência artificial, relatórios avançados e automações.
-      </p>
-
-      <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2 text.xs">
-        <span className="text-[11px] font-medium text-primary">Conhecer recursos</span>
-        <ArrowRight className="h-3.5 w-3.5 text-primary transition-transform duration-200 group-hover:translate-x-1" />
-      </div>
-    </Link>
   );
 }

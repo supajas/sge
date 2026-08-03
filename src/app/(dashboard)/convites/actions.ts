@@ -13,17 +13,28 @@ function generateCode(len = 8): string {
   return out;
 }
 
+const allowedRoles = [
+  "admin",
+  "coord_geral",
+  "coord_polo",
+  "coord_curso",
+  "secretaria",
+  "professor",
+  "tutor_presencial",
+  "tutor_distancia",
+] as const;
+
 const createInviteSchema = z.object({
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable(),
+  role: z.enum(allowedRoles), // Agora é obrigatório
   expires_in_days: z.number().int().min(1).max(90).default(7),
   single_use: z.boolean().default(true),
   polo_ids: z.array(z.string().uuid()).optional(),
+  course_ids: z.array(z.string().uuid()).optional(),
 });
 
 export async function createInviteAction(input: unknown) {
-  // 🟢 Adicionado await aqui!
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -42,8 +53,7 @@ export async function createInviteAction(input: unknown) {
   }
 
   const expires = new Date(Date.now() + data.expires_in_days * 86400_000).toISOString();
-  
-  // Generate a unique code
+
   let code = "";
   let existing = null;
   for (let i = 0; i < 5; i++) {
@@ -57,20 +67,25 @@ export async function createInviteAction(input: unknown) {
   }
   if (existing) throw new Error("Falha ao gerar um código de convite único. Tente novamente.");
 
+  const requiresPolo = data.role === "coord_polo" || data.role === "tutor_presencial";
+  const requiresCourse = data.role === "coord_curso" || data.role === "tutor_distancia" || data.role === "professor";
+
   const { data: inv, error } = await supabase
     .from("invites")
     .insert({
       code,
       institution_id: data.institution_id,
       email: data.email ?? null,
-      role: data.role ?? null, // Use data.role directly, which can be null
-      polo_ids: data.polo_ids ?? [],
+      role: data.role,
+      polo_ids: requiresPolo ? (data.polo_ids ?? []) : [],
+      course_ids: requiresCourse ? (data.course_ids ?? []) : [],
       expires_at: expires,
       single_use: data.single_use,
       created_by: user.id,
     })
     .select("id")
     .single();
+
   if (error || !inv) throw new Error(error?.message ?? "Falha ao criar convite");
 
   revalidatePath("/convites");
@@ -81,9 +96,10 @@ const updateInviteSchema = z.object({
   id: z.string().uuid(),
   institution_id: z.string().uuid(),
   email: z.string().email().nullable().optional(),
-  role: z.enum(["admin", "coord_geral", "coord_polo"]).nullable(),
+  role: z.enum(allowedRoles), // Agora é obrigatório
   expires_in_days: z.number().int().min(1).max(90),
   polo_ids: z.array(z.string().uuid()).optional(),
+  course_ids: z.array(z.string().uuid()).optional(),
 });
 
 export async function updateInviteAction(input: unknown) {
@@ -104,7 +120,6 @@ export async function updateInviteAction(input: unknown) {
     throw new Error("Sem permissão para editar este convite");
   }
 
-  // Check if invite exists and belongs to the institution
   const { data: existingInvite, error: existingInviteError } = await supabase
     .from("invites")
     .select("id")
@@ -118,12 +133,16 @@ export async function updateInviteAction(input: unknown) {
 
   const expires = new Date(Date.now() + data.expires_in_days * 86400_000).toISOString();
 
+  const requiresPolo = data.role === "coord_polo" || data.role === "tutor_presencial";
+  const requiresCourse = data.role === "coord_curso" || data.role === "tutor_distancia" || data.role === "professor";
+
   const { error } = await supabase
     .from("invites")
     .update({
       email: data.email ?? null,
-      role: data.role ?? null, // Use data.role directly, which can be null
-      polo_ids: data.polo_ids ?? [],
+      role: data.role,
+      polo_ids: requiresPolo ? (data.polo_ids ?? []) : [],
+      course_ids: requiresCourse ? (data.course_ids ?? []) : [],
       expires_at: expires,
     })
     .eq("id", data.id);

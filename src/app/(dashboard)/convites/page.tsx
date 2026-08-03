@@ -47,7 +47,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ROLE_LABELS, type AppRole } from "@/lib/roles";
+import { ROLE_LABELS, ROLE_OPTIONS, type AppRole } from "@/lib/roles";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -117,18 +117,20 @@ export default function ConvitesPage() {
     mutationFn: async (v: {
       id: string;
       email: string;
-      role: AppRole | "none";
+      role: AppRole;
       expires_in_days: number;
       polo_ids: string[];
+      course_ids: string[];
     }) => {
       if (!tenant.active) throw new Error("Sem instituição ativa");
       return updateInviteAction({
         id: v.id,
         institution_id: tenant.active.institutionId,
         email: v.email || null,
-        role: v.role === "none" ? null : (v.role as "admin" | "coord_geral" | "coord_polo"),
+        role: v.role,
         expires_in_days: v.expires_in_days,
         polo_ids: v.polo_ids,
+        course_ids: v.course_ids,
       });
     },
     onSuccess: () => {
@@ -142,18 +144,20 @@ export default function ConvitesPage() {
   const create = useMutation({
     mutationFn: async (v: {
       email: string;
-      role: AppRole | "none";
+      role: AppRole;
       expires_in_days: number;
       polo_ids: string[];
+      course_ids: string[];
     }) => {
       if (!tenant.active) throw new Error("Sem instituição ativa");
       return createInviteAction({
         institution_id: tenant.active.institutionId,
         email: v.email || null,
-        role: v.role === "none" ? null : (v.role as "admin" | "coord_geral" | "coord_polo"),
+        role: v.role,
         expires_in_days: v.expires_in_days,
         single_use: true,
         polo_ids: v.polo_ids,
+        course_ids: v.course_ids,
       });
     },
     onSuccess: () => {
@@ -173,7 +177,6 @@ export default function ConvitesPage() {
     );
   }
 
-  // Métricas
   const activeCount = data.filter(
     (i) => !i.used_at && new Date(i.expires_at).getTime() >= Date.now()
   ).length;
@@ -206,12 +209,13 @@ export default function ConvitesPage() {
             key={editingInvite.id}
             initialData={{
               email: editingInvite.email ?? "",
-              role: (editingInvite.role as AppRole) ?? "none",
+              role: (editingInvite.role as AppRole) ?? "secretaria",
               expires_in_days: Math.max(
                 1,
                 Math.ceil((new Date(editingInvite.expires_at).getTime() - Date.now()) / 86400_000)
               ),
               polo_ids: editingInvite.polo_ids ?? [],
+              course_ids: editingInvite.course_ids ?? [],
             }}
             onSubmit={(v) => update.mutate({ ...v, id: editingInvite.id })}
             pending={update.isPending}
@@ -222,7 +226,6 @@ export default function ConvitesPage() {
 
       <PageBody>
         <div className="space-y-6">
-          {/* Métricas Rápidas */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card className="border-border/60 bg-card/60 shadow-2xs">
               <CardContent className="p-4 flex items-center gap-4">
@@ -267,68 +270,7 @@ export default function ConvitesPage() {
             </Card>
           </div>
 
-          {/* VISÃO MOBILE: CARDS */}
-          <div className="md:hidden space-y-3">
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-36 w-full rounded-xl" />
-              ))
-            ) : data.length === 0 ? (
-              <EmptyInvitesState />
-            ) : (
-              data.map((i) => {
-                const expired = new Date(i.expires_at).getTime() < Date.now();
-                const used = !!i.used_at;
-                const active = !expired && !used;
-
-                return (
-                  <Card key={i.id} className="border-border/60 bg-card/80 shadow-2xs">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="font-mono text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                            {i.code}
-                          </span>
-                          <p className="mt-2 text-sm font-medium text-foreground">
-                            {i.email ?? "Qualquer e-mail"}
-                          </p>
-                        </div>
-                        <InviteStatusBadge used={used} expired={expired} />
-                      </div>
-
-                      <div className="mt-3 space-y-1 text-xs text-muted-foreground border-t border-border/40 pt-2">
-                        <div className="flex justify-between">
-                          <span>Perfil de Acesso:</span>
-                          <span className="font-medium text-foreground">
-                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A escolher"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Expira em:</span>
-                          <span className="font-medium text-foreground">
-                            {new Date(i.expires_at).toLocaleDateString("pt-BR")}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/40 pt-3">
-                        <InviteActions
-                          invite={i}
-                          active={active}
-                          tenantName={tenant.active?.name}
-                          onEdit={() => setEditingInvite(i)}
-                          onDelete={() => del.mutate(i.id)}
-                          iconOnly={false}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-
-          {/* VISÃO DESKTOP: TABELA */}
+          {/* VISÃO DESKTOP */}
           <div className="hidden rounded-xl border border-border/60 bg-card/60 shadow-2xs overflow-hidden md:block">
             <Table>
               <TableHeader className="bg-muted/40">
@@ -377,7 +319,7 @@ export default function ConvitesPage() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="font-normal bg-muted/60">
-                            {i.role ? ROLE_LABELS[i.role as AppRole] : "A definir no aceite"}
+                            {ROLE_LABELS[i.role as AppRole] ?? i.role}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -411,7 +353,6 @@ export default function ConvitesPage() {
   );
 }
 
-{/* BADGE DE STATUS */}
 function InviteStatusBadge({ used, expired }: { used: boolean; expired: boolean }) {
   if (used) {
     return (
@@ -434,7 +375,6 @@ function InviteStatusBadge({ used, expired }: { used: boolean; expired: boolean 
   );
 }
 
-{/* ESTADO VAZIO */}
 function EmptyInvitesState() {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -443,13 +383,12 @@ function EmptyInvitesState() {
       </div>
       <p className="text-sm font-medium text-foreground">Nenhum convite pendente</p>
       <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-        Gere links de convite para adicionar administradores e coordenadores à sua instituição.
+        Gere links de convite para adicionar colaboradores à sua instituição.
       </p>
     </div>
   );
 }
 
-{/* BOTOES DE AÇÃO */}
 function InviteActions({
   invite,
   active,
@@ -540,7 +479,6 @@ function InviteActions({
   );
 }
 
-{/* FORMULÁRIO */}
 function InviteForm({
   initialData,
   isEditing,
@@ -549,24 +487,27 @@ function InviteForm({
 }: {
   initialData?: {
     email: string;
-    role: AppRole | "none";
+    role: AppRole;
     expires_in_days: number;
     polo_ids: string[];
+    course_ids: string[];
   };
   isEditing?: boolean;
   onSubmit: (v: {
     email: string;
-    role: AppRole | "none";
+    role: AppRole;
     expires_in_days: number;
     polo_ids: string[];
+    course_ids: string[];
   }) => void;
   pending: boolean;
 }) {
   const tenant = useTenant();
   const [email, setEmail] = useState(initialData?.email ?? "");
-  const [role, setRole] = useState<AppRole | "none">(initialData?.role ?? "none");
+  const [role, setRole] = useState<AppRole>(initialData?.role ?? "secretaria");
   const [days, setDays] = useState(initialData?.expires_in_days ?? 7);
   const [poloIds, setPoloIds] = useState<string[]>(initialData?.polo_ids ?? []);
+  const [courseIds, setCourseIds] = useState<string[]>(initialData?.course_ids ?? []);
 
   const { data: polos = [] } = useQuery({
     queryKey: ["polos", tenant.active?.institutionId],
@@ -583,22 +524,57 @@ function InviteForm({
     enabled: !!tenant.active,
   });
 
-  const showPoloPicker = role === "coord_polo";
-  const canSubmit = !showPoloPicker || poloIds.length > 0;
+  const { data: courses = [] } = useQuery({
+    queryKey: ["courses", tenant.active?.institutionId],
+    queryFn: async () => {
+      if (!tenant.active) return [];
+      const { data, error } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("institution_id", tenant.active.institutionId)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenant.active,
+  });
+
+  const showPoloPicker = role === "coord_polo" || role === "tutor_presencial";
+  const showCoursePicker = role === "coord_curso" || role === "tutor_distancia" || role === "professor";
+
+  const canSubmit =
+    (!showPoloPicker || poloIds.length > 0) &&
+    (!showCoursePicker || courseIds.length > 0);
+
+  const handleRoleChange = (newRole: AppRole) => {
+    setRole(newRole);
+    if (newRole !== "coord_polo" && newRole !== "tutor_presencial") {
+      setPoloIds([]);
+    }
+    if (newRole !== "coord_curso" && newRole !== "tutor_distancia" && newRole !== "professor") {
+      setCourseIds([]);
+    }
+  };
 
   return (
-    <DialogContent className="sm:max-w-md">
+    <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{isEditing ? "Editar Convite" : "Gerar Novo Convite"}</DialogTitle>
         <DialogDescription>
-          Configure os acessos e a validade do convite antes de compartilhá-lo.
+          Configure o perfil e a validade do convite antes de compartilhá-lo.
         </DialogDescription>
       </DialogHeader>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!canSubmit) return;
-          onSubmit({ email, role, expires_in_days: days, polo_ids: poloIds });
+          onSubmit({
+            email,
+            role,
+            expires_in_days: days,
+            polo_ids: showPoloPicker ? poloIds : [],
+            course_ids: showCoursePicker ? courseIds : [],
+          });
         }}
         className="space-y-4 pt-2"
       >
@@ -618,16 +594,17 @@ function InviteForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Perfil Inicial</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as AppRole | "none")}>
+            <Label className="text-xs font-semibold">Perfil de Acesso</Label>
+            <Select value={role} onValueChange={(v) => handleRoleChange(v as AppRole)}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">A escolher no aceite</SelectItem>
-                <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
-                <SelectItem value="coord_geral">{ROLE_LABELS.coord_geral}</SelectItem>
-                <SelectItem value="coord_polo">{ROLE_LABELS.coord_polo}</SelectItem>
+              <SelectContent position="popper" className="z-50 max-h-60 overflow-y-auto">
+                {ROLE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -646,6 +623,7 @@ function InviteForm({
           </div>
         </div>
 
+        {/* SELETOR DE POLOS */}
         {showPoloPicker && (
           <div className="space-y-2 border-t border-border/40 pt-3">
             <Label className="text-xs font-semibold">
@@ -673,6 +651,42 @@ function InviteForm({
                       className="text-xs font-medium text-foreground cursor-pointer leading-none"
                     >
                       {polo.name}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SELETOR DE CURSOS */}
+        {showCoursePicker && (
+          <div className="space-y-2 border-t border-border/40 pt-3">
+            <Label className="text-xs font-semibold">
+              Vincular aos Cursos <span className="text-destructive">*</span>
+            </Label>
+            <div className="max-h-36 overflow-y-auto space-y-2 border border-border/60 rounded-md p-2.5 bg-muted/20">
+              {courses.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum curso cadastrado.</p>
+              ) : (
+                courses.map((course) => (
+                  <div key={course.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`course-${course.id}`}
+                      checked={courseIds.includes(course.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setCourseIds([...courseIds, course.id]);
+                        } else {
+                          setCourseIds(courseIds.filter((id) => id !== course.id));
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={`course-${course.id}`}
+                      className="text-xs font-medium text-foreground cursor-pointer leading-none"
+                    >
+                      {course.name}
                     </label>
                   </div>
                 ))

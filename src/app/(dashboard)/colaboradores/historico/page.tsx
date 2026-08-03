@@ -15,12 +15,13 @@ export const Route = createFileRoute("/_authenticated/colaboradores/historico")(
   component: HistoryPage,
 });
 
-type ActionType = "invite_redeemed" | "role_changed" | "polos_changed" | "removed";
+type ActionType = "invite_redeemed" | "role_changed" | "polos_changed" | "bindings_changed" | "removed";
 
 const ACTION_LABELS: Record<ActionType, string> = {
   invite_redeemed: "Convite aceito",
   role_changed: "Perfil alterado",
   polos_changed: "Polos alterados",
+  bindings_changed: "Vínculos alterados",
   removed: "Removido",
 };
 
@@ -28,6 +29,7 @@ const ACTION_VARIANTS: Record<ActionType, "default" | "secondary" | "outline" | 
   invite_redeemed: "default",
   role_changed: "secondary",
   polos_changed: "outline",
+  bindings_changed: "outline",
   removed: "destructive",
 };
 
@@ -134,7 +136,9 @@ export default function Page() {
                       {new Date(r.createdAt).toLocaleString("pt-BR")}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={ACTION_VARIANTS[r.action]}>{ACTION_LABELS[r.action]}</Badge>
+                      <Badge variant={ACTION_VARIANTS[r.action] ?? "default"}>
+                        {ACTION_LABELS[r.action] ?? r.action}
+                      </Badge>
                     </TableCell>
                     <TableCell className="font-medium">{r.targetName}</TableCell>
                     <TableCell className="text-sm">
@@ -170,7 +174,7 @@ function ChangeSummary({ row }: { row: Row }) {
       </span>
     );
   }
-  if (row.action === "polos_changed") {
+  if (row.action === "polos_changed" || row.action === "bindings_changed") {
     return (
       <span>
         Polos: {row.previousPolos.join(", ") || "—"} → {row.newPolos.join(", ") || "—"}

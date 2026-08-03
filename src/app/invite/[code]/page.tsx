@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { previewInviteAction, redeemInviteAction } from "@/lib/actions/invites";
+import { previewInviteAction, redeemInviteAction } from "./actions";
 import { useSession } from "@/lib/session";
 import type { AppRole } from "@/lib/roles";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,7 +90,7 @@ export default function InvitePage({ params }: { params: Promise<{ code: string 
   useEffect(() => {
     if (!sessionLoading && !session) {
       const currentPath = `/invite/${code}`;
-      router.replace(`/?redirect_to=${encodeURIComponent(currentPath)}`);
+      router.replace(`/?next=/invite/${code}`);
     }
   }, [session, sessionLoading, router, code]);
 

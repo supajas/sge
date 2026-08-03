@@ -47,18 +47,42 @@ export async function previewInviteAction(code: string) {
   };
 }
 
-export async function redeemInviteAction(formData: FormData) {
+export type RedeemInviteInput = {
+  code: string;
+  role?: "coord_geral" | "coord_polo" | null;
+  polo_ids?: string[];
+};
+
+export async function redeemInviteAction(input: RedeemInviteInput | FormData) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
-  const code = (formData.get("code") as string)?.trim().toUpperCase();
-  const role = formData.get("role") as "coord_geral" | "coord_polo" | null;
-  const polo_ids = formData.getAll("polos") as string[];
+  // Normalização de entrada (Suporta tanto chamada via JSON/Mutation quanto via FormData)
+  let code = "";
+  let role: "coord_geral" | "coord_polo" | null = null;
+  let polo_ids: string[] = [];
 
-  const { data: inv, error } = await supabase.from("invites").select("*").eq("code", code).maybeSingle();
+  if (input instanceof FormData) {
+    code = (input.get("code") as string)?.trim().toUpperCase();
+    role = input.get("role") as "coord_geral" | "coord_polo" | null;
+    polo_ids = input.getAll("polos") as string[];
+  } else {
+    code = input.code?.trim().toUpperCase();
+    role = input.role ?? null;
+    polo_ids = input.polo_ids ?? [];
+  }
+
+  if (!code) throw new Error("Código do convite não informado");
+
+  // 1. Validações seguras com o cliente autenticado do usuário
+  const { data: inv, error } = await supabase
+    .from("invites")
+    .select("*")
+    .eq("code", code)
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!inv) throw new Error("Convite não encontrado");
@@ -94,7 +118,21 @@ export async function redeemInviteAction(formData: FormData) {
     if (!polosOk || polosOk.length !== finalPolos.length) throw new Error("Polo inválido");
   }
 
-  const { data: existing } = await supabase
+  // 2. Instanciação do Cliente Admin para bypass das restrições de RLS
+  const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    throw new Error("Chave SUPABASE_SERVICE_ROLE_KEY não configurada no ambiente Server.");
+  }
+
+  const supabaseAdmin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey,
+    { auth: { persistSession: false } }
+  );
+
+  // 3. Execução das modificações no banco com permissão elevada
+  const { data: existing } = await supabaseAdmin
     .from("memberships")
     .select("id")
     .eq("user_id", user.id)
@@ -103,7 +141,7 @@ export async function redeemInviteAction(formData: FormData) {
 
   let membershipId = existing?.id ?? null;
   if (!membershipId) {
-    const { data: created, error: memErr } = await supabase
+    const { data: created, error: memErr } = await supabaseAdmin
       .from("memberships")
       .insert({ user_id: user.id, institution_id: inv.institution_id, role: finalRole })
       .select("id")
@@ -113,7 +151,7 @@ export async function redeemInviteAction(formData: FormData) {
   }
 
   if (inv.course_ids?.length) {
-    await supabase.from("coordinator_courses").upsert(
+    await supabaseAdmin.from("coordinator_courses").upsert(
       (inv.course_ids as string[]).map((cid: string) => ({
         membership_id: membershipId!,
         course_id: cid,
@@ -123,7 +161,7 @@ export async function redeemInviteAction(formData: FormData) {
   }
 
   if (finalPolos.length) {
-    await supabase.from("coordinator_polos").upsert(
+    await supabaseAdmin.from("coordinator_polos").upsert(
       finalPolos.map((pid: string) => ({
         membership_id: membershipId!,
         polo_id: pid,
@@ -133,10 +171,13 @@ export async function redeemInviteAction(formData: FormData) {
   }
 
   if (inv.single_use) {
-    await supabase.from("invites").update({ used_at: new Date().toISOString(), used_by: user.id }).eq("id", inv.id);
+    await supabaseAdmin
+      .from("invites")
+      .update({ used_at: new Date().toISOString(), used_by: user.id })
+      .eq("id", inv.id);
   }
 
-  await supabase.from("approval_history").insert({
+  await supabaseAdmin.from("approval_history").insert({
     institution_id: inv.institution_id,
     action: "invite_redeemed",
     actor_user_id: inv.created_by,
@@ -148,6 +189,21 @@ export async function redeemInviteAction(formData: FormData) {
     metadata: { invite_id: inv.id, code },
   });
 
+  // 4. Busca os vínculos atualizados do usuário para devolver à página
+  const { data: updatedMemberships } = await supabaseAdmin
+    .from("memberships")
+    .select(`
+      id,
+      institution_id,
+      role,
+      institutions ( id, name, city, state, logo_url ),
+      coordinator_polos ( polo_id )
+    `)
+    .eq("user_id", user.id);
+
   revalidatePath("/(dashboard)", "layout");
-  return { institutionId: inv.institution_id };
+  return { 
+    institutionId: inv.institution_id,
+    updatedMemberships: updatedMemberships ?? []
+  };
 }

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { roleRequiresPolo, roleRequiresCourse } from "@/lib/invite-requirements";
+import { roleRequiresPolo, roleRequiresCourse, roleAllowsPolo, roleAllowsCourse } from "@/lib/invite-requirements";
 
 function generateCode(len = 8): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -69,16 +69,17 @@ export async function createInviteAction(input: unknown) {
   }
   if (existing) throw new Error("Falha ao gerar um código de convite único. Tente novamente.");
 
-  const requiresPolo = roleRequiresPolo(data.role);
-  const requiresCourse = roleRequiresCourse(data.role);
+  // "Permite" decide se o vínculo é mantido no convite; "exige" decide se
+  // é obrigatório preencher. Antes, um curso selecionado para um papel que
+  // só "exige" polo (ex: coord_polo) era descartado aqui — mesmo o admin
+  // tendo marcado um curso no modal. Agora ele é preservado como opcional.
+  const finalPoloIds = roleAllowsPolo(data.role) ? (data.polo_ids ?? []) : [];
+  const finalCourseIds = roleAllowsCourse(data.role) ? (data.course_ids ?? []) : [];
 
-  const finalPoloIds = requiresPolo ? (data.polo_ids ?? []) : [];
-  const finalCourseIds = requiresCourse ? (data.course_ids ?? []) : [];
-
-  if (requiresPolo && finalPoloIds.length === 0) {
+  if (roleRequiresPolo(data.role) && finalPoloIds.length === 0) {
     throw new Error("Selecione pelo menos um polo para este perfil.");
   }
-  if (requiresCourse && finalCourseIds.length === 0) {
+  if (roleRequiresCourse(data.role) && finalCourseIds.length === 0) {
     throw new Error("Selecione pelo menos um curso para este perfil.");
   }
 
@@ -146,16 +147,13 @@ export async function updateInviteAction(input: unknown) {
 
   const expires = new Date(Date.now() + data.expires_in_days * 86400_000).toISOString();
 
-  const requiresPolo = roleRequiresPolo(data.role);
-  const requiresCourse = roleRequiresCourse(data.role);
+  const finalPoloIds = roleAllowsPolo(data.role) ? (data.polo_ids ?? []) : [];
+  const finalCourseIds = roleAllowsCourse(data.role) ? (data.course_ids ?? []) : [];
 
-  const finalPoloIds = requiresPolo ? (data.polo_ids ?? []) : [];
-  const finalCourseIds = requiresCourse ? (data.course_ids ?? []) : [];
-
-  if (requiresPolo && finalPoloIds.length === 0) {
+  if (roleRequiresPolo(data.role) && finalPoloIds.length === 0) {
     throw new Error("Selecione pelo menos um polo para este perfil.");
   }
-  if (requiresCourse && finalCourseIds.length === 0) {
+  if (roleRequiresCourse(data.role) && finalCourseIds.length === 0) {
     throw new Error("Selecione pelo menos um curso para este perfil.");
   }
 

@@ -48,7 +48,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ROLE_LABELS, ROLE_OPTIONS, type AppRole } from "@/lib/roles";
-import { roleRequiresPolo, roleRequiresCourse } from "@/lib/invite-requirements";
+import { roleRequiresPolo, roleRequiresCourse, roleAllowsPolo, roleAllowsCourse } from "@/lib/invite-requirements";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -101,6 +101,42 @@ export default function ConvitesPage() {
     queryFn: () => fetchInvites(tenant.active!.institutionId),
     enabled: !!tenant.active?.institutionId,
   });
+
+  // Usados só para exibir os nomes de polo/curso na coluna "Curso/Polos" da
+  // tabela — mesma queryKey usada dentro do InviteForm, então compartilham
+  // o cache do React Query (não duplica a busca quando o modal abre).
+  const { data: polosForDisplay = [] } = useQuery({
+    queryKey: ["polos", tenant.active?.institutionId],
+    queryFn: async () => {
+      if (!tenant.active) return [];
+      const { data, error } = await supabase
+        .from("polos")
+        .select("id, name")
+        .eq("institution_id", tenant.active.institutionId)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenant.active?.institutionId,
+  });
+
+  const { data: coursesForDisplay = [] } = useQuery({
+    queryKey: ["courses", tenant.active?.institutionId],
+    queryFn: async () => {
+      if (!tenant.active) return [];
+      const { data, error } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("institution_id", tenant.active.institutionId)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenant.active?.institutionId,
+  });
+
+  const poloNameById = new Map(polosForDisplay.map((p) => [p.id, p.name]));
+  const courseNameById = new Map(coursesForDisplay.map((c) => [c.id, c.name]));
 
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -279,6 +315,7 @@ export default function ConvitesPage() {
                   <TableHead className="font-semibold text-foreground">Código</TableHead>
                   <TableHead className="font-semibold text-foreground">E-mail Destinatário</TableHead>
                   <TableHead className="font-semibold text-foreground">Perfil Atribuído</TableHead>
+                  <TableHead className="font-semibold text-foreground">Curso/Polos</TableHead>
                   <TableHead className="font-semibold text-foreground">Validade</TableHead>
                   <TableHead className="font-semibold text-foreground">Status</TableHead>
                   <TableHead className="w-48 text-right font-semibold text-foreground">Ações</TableHead>
@@ -291,6 +328,7 @@ export default function ConvitesPage() {
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-36" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-8 w-28 ml-auto" /></TableCell>
@@ -298,7 +336,7 @@ export default function ConvitesPage() {
                   ))
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-12">
+                    <TableCell colSpan={7} className="py-12">
                       <EmptyInvitesState />
                     </TableCell>
                   </TableRow>
@@ -322,6 +360,31 @@ export default function ConvitesPage() {
                           <Badge variant="secondary" className="font-normal bg-muted/60">
                             {ROLE_LABELS[i.role as AppRole] ?? i.role}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[220px]">
+                            {(i.polo_ids ?? []).map((pid: string) => (
+                              <Badge
+                                key={pid}
+                                variant="outline"
+                                className="text-[10px] font-normal"
+                              >
+                                {poloNameById.get(pid) ?? pid}
+                              </Badge>
+                            ))}
+                            {(i.course_ids ?? []).map((cid: string) => (
+                              <Badge
+                                key={cid}
+                                variant="outline"
+                                className="text-[10px] font-normal bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                              >
+                                {courseNameById.get(cid) ?? cid}
+                              </Badge>
+                            ))}
+                            {!(i.polo_ids ?? []).length && !(i.course_ids ?? []).length && (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {new Date(i.expires_at).toLocaleDateString("pt-BR")}
@@ -540,23 +603,26 @@ function InviteForm({
     enabled: !!tenant.active,
   });
 
-  // Fonte única de verdade (src/lib/invite-requirements.ts), a mesma usada
-  // no servidor (createInviteAction/updateInviteAction). Nunca duplicar essa
-  // lista aqui de novo — é exatamente essa duplicação que causou o desalinho
-  // anterior entre o que o modal mostrava e o que o backend exigia.
-  const showPoloPicker = roleRequiresPolo(role);
-  const showCoursePicker = roleRequiresCourse(role);
+  // "Permite" decide se o seletor aparece no modal (opcional para o papel);
+  // "exige" decide se bloqueia o envio quando vazio. Antes, o seletor de
+  // Curso nem aparecia para Coordenador de Polo — por isso nunca dava para
+  // vincular um curso a esse papel na criação do convite (só editando depois
+  // em /colaboradores). Fonte única: src/lib/invite-requirements.ts.
+  const showPoloPicker = roleAllowsPolo(role);
+  const showCoursePicker = roleAllowsCourse(role);
+  const poloRequired = roleRequiresPolo(role);
+  const courseRequired = roleRequiresCourse(role);
 
   const canSubmit =
-    (!showPoloPicker || poloIds.length > 0) &&
-    (!showCoursePicker || courseIds.length > 0);
+    (!poloRequired || poloIds.length > 0) &&
+    (!courseRequired || courseIds.length > 0);
 
   const handleRoleChange = (newRole: AppRole) => {
     setRole(newRole);
-    if (!roleRequiresPolo(newRole)) {
+    if (!roleAllowsPolo(newRole)) {
       setPoloIds([]);
     }
-    if (!roleRequiresCourse(newRole)) {
+    if (!roleAllowsCourse(newRole)) {
       setCourseIds([]);
     }
   };
@@ -632,7 +698,8 @@ function InviteForm({
         {showPoloPicker && (
           <div className="space-y-2 border-t border-border/40 pt-3">
             <Label className="text-xs font-semibold">
-              Vincular aos Polos <span className="text-destructive">*</span>
+              Vincular aos Polos {poloRequired && <span className="text-destructive">*</span>}
+              {!poloRequired && <span className="text-muted-foreground font-normal">(Opcional)</span>}
             </Label>
             <div className="max-h-36 overflow-y-auto space-y-2 border border-border/60 rounded-md p-2.5 bg-muted/20">
               {polos.length === 0 ? (
@@ -668,7 +735,8 @@ function InviteForm({
         {showCoursePicker && (
           <div className="space-y-2 border-t border-border/40 pt-3">
             <Label className="text-xs font-semibold">
-              Vincular aos Cursos <span className="text-destructive">*</span>
+              Vincular aos Cursos {courseRequired && <span className="text-destructive">*</span>}
+              {!courseRequired && <span className="text-muted-foreground font-normal">(Opcional)</span>}
             </Label>
             <div className="max-h-36 overflow-y-auto space-y-2 border border-border/60 rounded-md p-2.5 bg-muted/20">
               {courses.length === 0 ? (

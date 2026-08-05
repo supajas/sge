@@ -250,21 +250,24 @@ export function StepGrades({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        {/* Cabeçalho: título+badge numa linha; ações em grid de 2 colunas no
+            mobile (evita amontoar tudo numa linha só em telas estreitas),
+            voltando a uma única linha a partir do md. */}
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold">Lançamento de notas</h3>
             <Badge variant="secondary" className="gap-1">
               <Save className="h-3 w-3" /> Salvamento automático
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 md:flex md:w-auto md:gap-2">
             <ExportDialog
               columns={exportColumns}
               data={exportData}
               filename={`notas_turma_${classId}`}
               title="Relatório de Lançamento de Notas"
             />
-            <Button size="sm" variant="ghost" onClick={onBack}>
+            <Button size="sm" variant="ghost" onClick={onBack} className="w-full md:w-auto">
               <ArrowLeft className="mr-1 h-4 w-4" /> Trocar disciplina
             </Button>
           </div>
@@ -286,24 +289,42 @@ export function StepGrades({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="space-y-3 pt-2">
+                    <div className="space-y-2 pt-2">
                       {fields.map((f) => {
                         const g = gradeMap.get(`${s.id}:${f.id}`);
                         const displayVal =
                           f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
+
                         if (f.kind === "average") {
                           return (
-                            <div key={f.id} className="flex items-center justify-between rounded-md bg-muted p-3">
-                              <Label>{f.label}</Label>
-                              <span className="text-sm font-medium">
+                            <div
+                              key={f.id}
+                              className="flex items-center justify-between rounded-md border border-border/60 bg-muted/40 px-3 py-2"
+                            >
+                              <Label className="text-xs font-medium">{f.label}</Label>
+                              <span className="text-sm font-semibold">
                                 {computedAverage != null ? computedAverage.toFixed(2) : "—"}
                               </span>
                             </div>
                           );
                         }
+
+                        // Linha compacta: label (+ máx/peso quando aplicável) à
+                        // esquerda, input com largura fixa à direita — em vez
+                        // de esticar 100% da largura para um valor curto.
                         return (
-                          <div key={f.id}>
-                            <Label className="text-xs font-medium text-muted-foreground">{f.label}</Label>
+                          <div
+                            key={f.id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <Label className="text-xs font-medium text-foreground">{f.label}</Label>
+                              {f.kind === "score" && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  máx {f.max_value} · peso {f.weight}
+                                </p>
+                              )}
+                            </div>
                             <Input
                               defaultValue={displayVal}
                               key={`${s.id}:${f.id}:${displayVal}`}
@@ -312,8 +333,8 @@ export function StepGrades({
                                 if (newVal === displayVal) return;
                                 upsert.mutate({ studentId: s.id, field: f, value: newVal });
                               }}
-                              className="h-9 mt-1"
-                              placeholder={f.kind === "status" ? "Ex.: Aprovado" : "—"}
+                              className="h-9 w-20 shrink-0 text-center"
+                              placeholder={f.kind === "status" ? "Ex.: Apr." : "—"}
                               inputMode={f.kind === "status" ? "text" : "decimal"}
                             />
                           </div>

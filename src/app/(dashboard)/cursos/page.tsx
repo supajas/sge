@@ -249,12 +249,33 @@ export default function CursosPage() {
                   <CardContent className="p-4">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-semibold text-foreground text-base tracking-tight">{c.name}</h4>
-                        {c.code && (
-                          <Badge variant="outline" className="font-mono text-[10px] shrink-0">
-                            {c.code}
-                          </Badge>
-                        )}
+                        <h4 className="font-semibold text-foreground text-base tracking-tight min-w-0 truncate">
+                          {c.name}
+                        </h4>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {c.code && (
+                            <Badge variant="outline" className="mr-1 font-mono text-[10px]">
+                              {c.code}
+                            </Badge>
+                          )}
+                          {canEdit && (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  setEditing(c);
+                                  setFormOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <DeleteCourseDialog name={c.name} onConfirm={() => del.mutate(c.id)} isIconOnly />
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <div className="pt-1">
@@ -262,23 +283,6 @@ export default function CursosPage() {
                         <PoloBadges poloIds={c.polo_ids} polosList={polos} />
                       </div>
                     </div>
-
-                    {canEdit && (
-                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border/40 pt-3">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs hover:bg-accent"
-                          onClick={() => {
-                            setEditing(c);
-                            setFormOpen(true);
-                          }}
-                        >
-                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar
-                        </Button>
-                        <DeleteCourseDialog name={c.name} onConfirm={() => del.mutate(c.id)} />
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))

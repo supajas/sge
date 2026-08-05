@@ -198,38 +198,39 @@ export default function PolosPage() {
             ) : (
               data.map((p) => (
                 <Card key={p.id} className="border-border/60 bg-card/80 shadow-2xs">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <h4 className="font-semibold text-foreground text-base tracking-tight">{p.name}</h4>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                          <span>
-                            {p.city ? p.city : "Cidade não informada"}
-                          </span>
-                          {p.state && (
-                            <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0 uppercase">
-                              {p.state}
-                            </Badge>
-                          )}
-                        </div>
+                  <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <div className="min-w-0 space-y-1">
+                      <h4 className="font-semibold text-foreground text-base tracking-tight truncate">
+                        {p.name}
+                      </h4>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                        <span className="truncate">
+                          {p.city ? p.city : "Cidade não informada"}
+                        </span>
+                        {p.state && (
+                          <Badge variant="outline" className="ml-1 shrink-0 text-[10px] px-1.5 py-0 uppercase">
+                            {p.state}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
                     {canEdit && (
-                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border/40 pt-3">
+                      <div className="flex shrink-0 items-center gap-1">
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="ghost"
-                          className="h-8 text-xs hover:bg-accent"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
                           onClick={() => {
                             setEditing(p);
                             setFormOpen(true);
                           }}
                         >
-                          <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span className="sr-only">Editar</span>
                         </Button>
-                        <DeletePoloDialog name={p.name} onConfirm={() => del.mutate(p.id)} />
+                        <DeletePoloDialog name={p.name} onConfirm={() => del.mutate(p.id)} isIconOnly />
                       </div>
                     )}
                   </CardContent>

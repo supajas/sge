@@ -9,7 +9,7 @@ import { isAdminLike } from "@/lib/roles";
 import { PageBody, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Template } from "@/lib/types/templates";
-import { TemplateCard } from "@/components/template-card";
+import { TemplateCard } from "./components/template-card";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

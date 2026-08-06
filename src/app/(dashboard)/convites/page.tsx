@@ -307,6 +307,99 @@ export default function ConvitesPage() {
             </Card>
           </div>
 
+          {/* VISÃO MOBILE (faltava por completo — a tabela abaixo é escondida
+              no mobile via `md:block`, mas não existia nenhum `md:hidden`
+              equivalente, por isso a lista de convites simplesmente
+              desaparecia em telas pequenas). Mesmo padrão de card usado em
+              Alunos/Colaboradores/Polos/Cursos/Turmas: ações em ícone no
+              topo, badges de perfil/status/curso-polos abaixo. */}
+          <div className="space-y-3 md:hidden">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="border-border/60 bg-card/80 shadow-2xs">
+                  <CardContent className="p-4 space-y-2.5">
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-5 w-32" />
+                  </CardContent>
+                </Card>
+              ))
+            ) : data.length === 0 ? (
+              <Card className="border-border/60 bg-card/60 shadow-2xs">
+                <CardContent className="py-4">
+                  <EmptyInvitesState />
+                </CardContent>
+              </Card>
+            ) : (
+              data.map((i) => {
+                const expired = new Date(i.expires_at).getTime() < Date.now();
+                const used = !!i.used_at;
+                const active = !expired && !used;
+
+                return (
+                  <Card key={i.id} className="border-border/60 bg-card/80 shadow-2xs">
+                    <CardContent className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-md">
+                          {i.code}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <InviteActions
+                            invite={i}
+                            active={active}
+                            tenantName={tenant.active?.institutionName}
+                            onEdit={() => setEditingInvite(i)}
+                            onDelete={() => del.mutate(i.id)}
+                            iconOnly
+                          />
+                        </div>
+                      </div>
+
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {i.email ? (
+                          i.email
+                        ) : (
+                          <span className="font-normal italic text-muted-foreground">
+                            Livre (Qualquer e-mail)
+                          </span>
+                        )}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary" className="text-[11px] font-normal bg-muted/60">
+                          {ROLE_LABELS[i.role as AppRole] ?? i.role}
+                        </Badge>
+                        <InviteStatusBadge used={used} expired={expired} />
+                        <span className="text-[11px] text-muted-foreground">
+                          Válido até {new Date(i.expires_at).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+
+                      {(!!(i.polo_ids ?? []).length || !!(i.course_ids ?? []).length) && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {(i.polo_ids ?? []).map((pid: string) => (
+                            <Badge key={pid} variant="outline" className="text-[10px] font-normal">
+                              {poloNameById.get(pid) ?? pid}
+                            </Badge>
+                          ))}
+                          {(i.course_ids ?? []).map((cid: string) => (
+                            <Badge
+                              key={cid}
+                              variant="outline"
+                              className="text-[10px] font-normal bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                            >
+                              {courseNameById.get(cid) ?? cid}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
           {/* VISÃO DESKTOP */}
           <div className="hidden rounded-xl border border-border/60 bg-card/60 shadow-2xs overflow-hidden md:block">
             <Table>

@@ -128,18 +128,19 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
         opacity: 0,
       }}
     >
-      <div className="flex items-center justify-between gap-4 mb-4">
+      <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder="Buscar por nome ou matrícula na turma..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:w-auto">
           <Dialog open={exportOpen} onOpenChange={setExportOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
-                <Download className="mr-1 h-4 w-4" /> Exportar
+                <Download className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Exportar</span>
               </Button>
             </DialogTrigger>
             <ExportAlunosDialog
@@ -153,7 +154,8 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
               <Dialog open={importOpen} onOpenChange={setImportOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="outline">
-                    <Upload className="mr-1 h-4 w-4" /> Importar
+                    <Upload className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Importar</span>
                   </Button>
                 </DialogTrigger>
                 <ImportDialog
@@ -172,7 +174,8 @@ export function AlunosList({ turmaId, canEdit }: { turmaId: string; canEdit: boo
               >
                 <DialogTrigger asChild>
                   <Button size="sm">
-                    <Plus className="mr-1 h-4 w-4" /> Novo aluno
+                    <Plus className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Novo aluno</span>
                   </Button>
                 </DialogTrigger>
                 <StudentFormDialog

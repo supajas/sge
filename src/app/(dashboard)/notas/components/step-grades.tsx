@@ -134,18 +134,24 @@ export function StepGrades({
 
   const upsert = useMutation({
     mutationFn: async (v: { studentId: string; field: Field; value: string }) => {
+      // Tratamento para aceitar vírgula (7,5) e converter para número válido
+      const rawVal = v.value.replace(",", ".").trim();
+      const numericVal = rawVal === "" ? null : Number(rawVal);
+
       const payload = {
         institution_id: institutionId,
         class_id: classId,
         subject_id: subjectId,
         student_id: v.studentId,
         template_field_id: v.field.id,
-        value: v.field.kind === "status" ? null : v.value === "" ? null : Number(v.value),
+        value: v.field.kind === "status" ? null : isNaN(numericVal!) ? null : numericVal,
         status_value: v.field.kind === "status" ? v.value || null : null,
       };
+
       const { error } = await supabase
         .from("grades")
         .upsert(payload, { onConflict: "student_id,subject_id,class_id,template_field_id" });
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -155,7 +161,20 @@ export function StepGrades({
       });
     },
     onError: (e: Error) => {
-      toast.error(e.message || "Erro ao salvar nota.");
+      // Intercepta a porta de RLS do Supabase
+      if (e.message?.toLowerCase().includes("row-level security")) {
+        toast.error("Sem permissão para alterar", {
+          description: "Seu perfil possui acesso apenas para visualização e não pode editar as notas.",
+          duration: 6000,
+          dismissible: true,
+        });
+        return;
+      }
+
+      toast.error("Erro ao salvar nota", {
+        description: e.message || "Tente novamente em instantes.",
+        duration: 5000,
+      });
     },
   });
 
@@ -250,9 +269,7 @@ export function StepGrades({
   return (
     <Card>
       <CardContent className="p-4">
-        {/* Cabeçalho: título+badge numa linha; ações em grid de 2 colunas no
-            mobile (evita amontoar tudo numa linha só em telas estreitas),
-            voltando a uma única linha a partir do md. */}
+        {/* Cabeçalho */}
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold">Lançamento de notas</h3>
@@ -309,9 +326,6 @@ export function StepGrades({
                           );
                         }
 
-                        // Linha compacta: label (+ máx/peso quando aplicável) à
-                        // esquerda, input com largura fixa à direita — em vez
-                        // de esticar 100% da largura para um valor curto.
                         return (
                           <div
                             key={f.id}

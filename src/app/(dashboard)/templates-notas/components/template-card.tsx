@@ -29,7 +29,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Field, Template, KIND_LABEL } from "@/lib/types/templates";
-import { reorderTemplateFieldsAction } from "@/app/(dashboard)/templates-notas/actions";
+import { reorderTemplateFieldsAction } from "../actions";
 
 // Tipo explícito das variáveis da mutation de reordenação. Passar a Server
 // Action diretamente como `mutationFn` fazia o TypeScript não conseguir
@@ -144,10 +144,10 @@ export function TemplateCard({
   });
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+    <Card className="border-border/60 bg-card/60 shadow-2xs">
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 border-b border-border/40 pb-3">
         <div className="flex-1 space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {canEdit ? (
               <Input
                 value={name}
@@ -166,17 +166,18 @@ export function TemplateCard({
           </div>
         </div>
         {canEdit && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             {!template.is_default && (
-              <Button size="sm" variant="outline" onClick={onSetDefault}>
+              <Button size="sm" variant="outline" className="text-xs" onClick={onSetDefault}>
                 Tornar padrão
               </Button>
             )}
             {!template.is_default && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button size="icon" variant="ghost">
-                    <Trash2 className="h-4 w-4" />
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="sr-only">Excluir template</span>
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -197,40 +198,61 @@ export function TemplateCard({
           </div>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {/* Mobile View: list of fields */}
         <div className="md:hidden">
           <div className="space-y-3">
             {fields.map((f, index) => (
-              <div key={f.id} className="rounded-lg border bg-muted/30 p-3">
+              <div key={f.id} className="rounded-lg border border-border/60 bg-muted/20 p-3.5">
                 {canEdit ? (
                   <>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <Input
                         defaultValue={f.label}
                         onBlur={(e) => e.target.value !== f.label && updField.mutate({ id: f.id, label: e.target.value })}
-                        className="h-8 flex-1 font-medium"
+                        className="h-9 flex-1 min-w-0 font-medium"
                       />
-                      <div className="flex">
-                        <Button size="icon" variant="ghost" disabled={index === 0} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'up' })}>
-                          <ArrowUp className="h-4 w-4" />
+                      <div className="flex shrink-0 -mr-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10 disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
+                          disabled={index === 0}
+                          onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'up' })}
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" disabled={index === fields.length - 1} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'down' })}>
-                          <ArrowDown className="h-4 w-4" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10 disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
+                          disabled={index === fields.length - 1}
+                          onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'down' })}
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => delField.mutate(f.id)}>
-                          <Trash2 className="h-4 w-4" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => delField.mutate(f.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                    {/* Tipo/Peso/Máx num grid de 3 colunas: antes "Máx" quebrava
+                        para uma linha própria (grid-cols-2 com 3 itens),
+                        ocupando só metade da largura e deixando espaço vazio.
+                        Com 3 colunas, os três cabem numa linha só. */}
+                    <div className="mt-3 grid grid-cols-3 gap-2.5">
                       <div>
-                        <Label className="text-xs">Tipo</Label>
+                        <Label className="text-[11px] text-muted-foreground">Tipo</Label>
                         <Select
                           value={f.kind}
                           onValueChange={(v) => updField.mutate({ id: f.id, kind: v as Field["kind"] })}
                         >
-                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="score">Nota</SelectItem>
                             <SelectItem value="average">Média</SelectItem>
@@ -239,19 +261,19 @@ export function TemplateCard({
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-xs">Peso</Label>
+                        <Label className="text-[11px] text-muted-foreground">Peso</Label>
                         <Input
                           type="number" step="0.1" defaultValue={f.weight}
                           onBlur={(e) => Number(e.target.value) !== f.weight && updField.mutate({ id: f.id, weight: Number(e.target.value) })}
-                          className="h-8" disabled={f.kind !== "score"}
+                          className="h-9 mt-1 text-xs" disabled={f.kind !== "score"}
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Máx</Label>
+                        <Label className="text-[11px] text-muted-foreground">Máx</Label>
                         <Input
                           type="number" step="0.1" defaultValue={f.max_value}
                           onBlur={(e) => Number(e.target.value) !== f.max_value && updField.mutate({ id: f.id, max_value: Number(e.target.value) })}
-                          className="h-8" disabled={f.kind === "status"}
+                          className="h-9 mt-1 text-xs" disabled={f.kind === "status"}
                         />
                       </div>
                     </div>
@@ -272,8 +294,8 @@ export function TemplateCard({
         </div>
 
         {/* Desktop View: grid table */}
-        <div className="hidden rounded-md border md:block">
-          <div className="grid grid-cols-[auto_1fr_140px_100px_100px_40px] gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+        <div className="hidden overflow-hidden rounded-md border border-border/60 md:block">
+          <div className="grid grid-cols-[auto_1fr_140px_100px_100px_40px] gap-2 border-b border-border/40 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
             <span />
             <span>Rótulo</span>
             <span>Tipo</span>
@@ -284,13 +306,13 @@ export function TemplateCard({
           {fields.map((f, index) => (
             <div
               key={f.id}
-              className="grid grid-cols-[auto_1fr_140px_100px_100px_40px] items-center gap-2 border-b px-3 py-2 last:border-b-0"
+              className="grid grid-cols-[auto_1fr_140px_100px_100px_40px] items-center gap-2 border-b border-border/40 px-3 py-2 last:border-b-0"
             >
               <div className="flex">
-                <Button size="icon" variant="ghost" className="h-8 w-6" disabled={index === 0} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'up' })}>
+                <Button size="icon" variant="ghost" className="h-8 w-6 text-primary/70 hover:text-primary hover:bg-primary/10 disabled:text-muted-foreground/40 disabled:hover:bg-transparent" disabled={index === 0} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'up' })}>
                   <ArrowUp className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-6" disabled={index === fields.length - 1} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'down' })}>
+                <Button size="icon" variant="ghost" className="h-8 w-6 text-primary/70 hover:text-primary hover:bg-primary/10 disabled:text-muted-foreground/40 disabled:hover:bg-transparent" disabled={index === fields.length - 1} onClick={() => reorder.mutate({ template_id: template.id, field_id: f.id, direction: 'down' })}>
                   <ArrowDown className="h-4 w-4" />
                 </Button>
               </div>
@@ -338,7 +360,7 @@ export function TemplateCard({
                     className="h-8"
                     disabled={f.kind === "status"}
                   />
-                  <Button size="icon" variant="ghost" onClick={() => delField.mutate(f.id)}>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10" onClick={() => delField.mutate(f.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </>
@@ -355,8 +377,8 @@ export function TemplateCard({
           ))}
         </div>
         {canEdit && (
-          <div className="mt-3">
-            <Button size="sm" variant="outline" onClick={() => addField.mutate()}>
+          <div className="mt-3 border-t border-border/40 pt-3">
+            <Button size="sm" variant="outline" className="text-xs shadow-2xs" onClick={() => addField.mutate()}>
               <Plus className="mr-1 h-4 w-4" /> Adicionar campo
             </Button>
           </div>

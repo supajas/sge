@@ -40,36 +40,30 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   ],
   coord_geral: [
     'view:dashboard', 'view:polos', 'view:courses', 'view:classes', 'view:disciplines', 'view:hidden_disciplines',
-    'view:students', 'view:grades', 'view:invites', 'view:collaborators', 'view:configurations', 'view:templates-notas', 'view:periods',
-    'manage:courses', 'manage:students', 'manage:grades', 'manage:invites', 'manage:collaborators', 'manage:configurations', 'manage:templates-notas', 'manage:periods'
+    'view:students', 'view:grades', 'view:invites', 'view:collaborators', 'view:configurations', 'manage:courses', 'manage:students', 'manage:grades', 'manage:invites', 'manage:collaborators', 'manage:configurations', 
   ],
   secretaria: [
     'view:dashboard', 'view:polos', 'view:courses', 'view:classes', 'view:disciplines', 'view:hidden_disciplines',
-    'view:students', 'view:grades', 'view:invites', 'view:collaborators', 'view:periods',
-    'manage:students', 'manage:invites'
+    'view:students', 'view:grades', 'view:periods', 'manage:students'
   ],
   coord_curso: [
     'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:hidden_disciplines',
-    'view:students', 'view:grades', 'view:templates-notas', 'view:periods', 'manage:courses', 'manage:grades'
+    'view:students', 'view:grades', 'manage:courses', 'manage:grades'
   ],
   
   // ⛔ PERFIS RESTRITOS (Escopo regional / de sala)
   coord_polo: [
     'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines',
-    'view:students', 'view:grades', 'view:templates-notas', 'view:periods',
-    'manage:grades'
+    'view:students', 'view:grades', 'manage:grades'
   ],
   professor: [
-    'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:students', 'view:periods',
-    'manage:grades'
+    'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:students', 'manage:grades'
   ],
   tutor_presencial: [
-    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'view:periods',
-    'manage:grades'
+    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'manage:grades'
   ],
   tutor_distancia: [
-    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'view:periods',
-    'manage:grades'
+    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'manage:grades'
   ]
 };
 

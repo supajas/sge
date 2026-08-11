@@ -160,7 +160,14 @@ export function useNotasFilters(filters: {
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!tenantActive?.institutionId && hasPermission(currentRole, "view:periods"),
+    // Períodos Letivos, aqui dentro do wizard de notas, é um passo estrutural
+    // do fluxo — não deveria depender de `view:periods` (que controla só a
+    // visibilidade do item "Períodos" na sidebar/página própria). São
+    // responsabilidades distintas: um perfil pode não precisar acessar
+    // /periodos diretamente, mas ainda assim precisa selecionar o período
+    // pra lançar notas. Ver /periodos e usar período dentro de /notas não
+    // devem estar acoplados pela mesma permissão.
+    enabled: !!tenantActive?.institutionId,
   });
 
   // ---------------------------------------------------------------------------

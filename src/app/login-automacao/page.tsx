@@ -10,10 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Página isolada e não-linkada, usada apenas por um usuário de automação
-// (login via e-mail/senha). Não faz parte do fluxo público de login, que
-// continua exclusivamente via Google em `/`. Nada aqui é importado ou
-// referenciado por outras páginas — remover no futuro é só deletar a pasta.
 export default function LoginAutomacaoPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -24,16 +20,30 @@ export default function LoginAutomacaoPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // 1. Autentica e-mail e senha
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      toast.error(error.message || "Falha ao autenticar. Verifique e-mail e senha.");
+    if (signInError) {
+      toast.error(signInError.message || "Falha ao autenticar. Verifique e-mail e senha.");
       setIsSubmitting(false);
       return;
     }
 
     toast.success("Autenticado com sucesso.");
-    router.push("/onboarding");
+
+    try {
+      // 2. Verifica se o usuário autenticado é Platform Admin
+      const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
+
+      if (isPlatformAdmin) {
+        router.push("/plataforma");
+      } else {
+        router.push("/onboarding");
+      }
+    } catch {
+      // Fallback seguro caso a RPC falhe por algum motivo pontual
+      router.push("/onboarding");
+    }
   };
 
   return (

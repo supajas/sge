@@ -56,54 +56,63 @@ export default function OnboardingPage() {
   const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    async function checkExistingMemberships() {
-      if (loading || hasInitialized) return;
+  async function checkExistingMemberships() {
+    if (loading || hasInitialized) return;
 
-      if (!user) {
-        router.replace("/");
+    if (!user) {
+      router.replace("/");
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+
+      // 1. Checa se o usuário é Administrador da Plataforma
+      const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
+
+      if (isPlatformAdmin) {
+        router.replace("/plataforma");
         return;
       }
 
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("memberships")
-          .select(
-            `
-            institution_id,
-            role,
-            institutions (
-              id,
-              name,
-              city,
-              state,
-              logo_url
-            )
+      // 2. Fluxo normal: busca vinculações de instituições
+      const { data, error } = await supabase
+        .from("memberships")
+        .select(
           `
+          institution_id,
+          role,
+          institutions (
+            id,
+            name,
+            city,
+            state,
+            logo_url
           )
-          .eq("user_id", user.id);
+        `
+        )
+        .eq("user_id", user.id);
 
-        if (error) throw error;
+      if (error) throw error;
 
-        const list = (data || []) as unknown as UserMembership[];
-        setMemberships(list);
+      const list = (data || []) as unknown as UserMembership[];
+      setMemberships(list);
 
-        // Se tem 1 ou mais instituições, exibe a tela de seleção por padrão na chegada
-        if (list.length >= 1) {
-          setStep("select");
-        } else {
-          setStep("menu");
-        }
-      } catch (err) {
-        console.error("Erro ao verificar vínculos do usuário:", err);
-      } finally {
-        setCheckingMembership(false);
-        setHasInitialized(true);
+      if (list.length >= 1) {
+        setStep("select");
+      } else {
+        setStep("menu");
       }
+    } catch (err) {
+      console.error("Erro ao verificar vínculos do usuário:", err);
+    } finally {
+      setCheckingMembership(false);
+      setHasInitialized(true);
     }
+  }
 
-    checkExistingMemberships();
-  }, [user, loading, router, hasInitialized]);
+  checkExistingMemberships();
+}, [user, loading, router, hasInitialized]);
 
   if (loading || checkingMembership) {
     return (

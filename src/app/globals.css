@@ -182,3 +182,43 @@
 html {
   scrollbar-gutter: stable;
 }
+
+/* -----------------------------------------------------------------------
+   ADICIONAR AO FINAL DE src/app/globals.css (não substitui nada existente,
+   só soma um novo escopo de tokens).
+
+   Tema visual isolado para /plataforma: mesma "família" de design (chroma
+   real, não desaturado, seguindo a mesma filosofia da paleta "ink-teal"
+   principal), mas com matiz diferente (violeta, hue ~275) — para que a área
+   de Platform Admin se sinta claramente distinta da área institucional, sem
+   duplicar nenhum componente. A classe `.platform-theme` é aplicada uma vez
+   só, no wrapper raiz de src/app/plataforma/layout.tsx — todo componente
+   shadcn dentro dessa subárvore (Button, Card, Badge, etc.) já usa essas
+   variáveis automaticamente via Tailwind (bg-primary, text-primary, etc.),
+   então nada mais precisa mudar.
+   ----------------------------------------------------------------------- */
+
+.platform-theme {
+  --primary: oklch(0.50 0.16 275);
+  --primary-foreground: oklch(0.99 0.005 220);
+  --ring: oklch(0.50 0.16 275);
+  --accent: oklch(0.93 0.035 275);
+  --accent-foreground: oklch(0.24 0.06 275);
+  --sidebar-primary: oklch(0.50 0.16 275);
+  --sidebar-accent: oklch(0.93 0.03 275);
+  --sidebar-accent-foreground: oklch(0.24 0.06 275);
+  --sidebar-ring: oklch(0.50 0.16 275);
+  --chart-1: oklch(0.50 0.16 275);
+}
+
+.dark .platform-theme {
+  --primary: oklch(0.72 0.15 273);
+  --primary-foreground: oklch(0.15 0.02 235);
+  --ring: oklch(0.72 0.15 273);
+  --accent: oklch(0.28 0.06 273);
+  --accent-foreground: oklch(0.96 0.01 220);
+  --sidebar-primary: oklch(0.72 0.15 273);
+  --sidebar-accent: oklch(0.25 0.04 273);
+  --sidebar-accent-foreground: oklch(0.96 0.01 220);
+  --sidebar-ring: oklch(0.72 0.15 273);
+}

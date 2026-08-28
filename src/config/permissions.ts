@@ -48,7 +48,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
   ],
   coord_curso: [
     'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:hidden_disciplines',
-    'view:students', 'view:grades', 'manage:courses', 'manage:grades'
+    'view:students', 'view:grades', 'manage:courses'
   ],
   
   // ⛔ PERFIS RESTRITOS (Escopo regional / de sala)
@@ -57,13 +57,13 @@ export const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'view:students', 'view:grades', 'manage:grades'
   ],
   professor: [
-    'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:students', 'manage:grades'
+    'view:dashboard', 'view:courses', 'view:classes', 'view:polos', 'view:disciplines', 'view:students', 'view:grades', 'manage:grades'
   ],
   tutor_presencial: [
-    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'manage:grades'
+    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades'
   ],
   tutor_distancia: [
-    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades', 'manage:grades'
+    'view:dashboard', 'view:courses', 'view:polos', 'view:classes', 'view:disciplines', 'view:students', 'view:grades'
   ]
 };
 

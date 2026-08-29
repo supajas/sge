@@ -1,70 +1,57 @@
 "use client";
 
-import { ArrowLeft, Building, BarChart3, Bot, Sparkles, Rocket, Check, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { 
+  ArrowLeft, 
+  Heart, 
+  Sparkles, 
+  Copy, 
+  Check, 
+  Server, 
+  Cpu, 
+  ShieldCheck, 
+  QrCode, 
+  Coffee,
+  Code2
+} from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const features = [
+const PIX_PAYLOAD = "00020126510014BR.GOV.BCB.PIX0129alanjohnnydeandrade@gmail.com5204000053039865802BR5925ALAN JOHNNY DE ANDRADE SI6006RAPOSA622605227aSXkJeWLZSh49s8qpjmcJ63045E08";
+
+const impactItems = [
   {
-    icon: Building,
-    title: "Multi-Instituição",
-    description: "Gerencie múltiplas unidades, filiais ou campi a partir de uma única conta, com total separação de dados e permissões.",
+    icon: Server,
+    title: "Infraestrutura & Servidores",
+    description: "Ajuda a manter nossos bancos de dados e serviços cloud rodando 24/7 com alta velocidade.",
   },
   {
-    icon: BarChart3,
-    title: "Relatórios Avançados",
-    description: "Acesse dashboards interativos com insights sobre matrículas, desempenho acadêmico e indicadores de evasão.",
+    icon: Cpu,
+    title: "APIs & Recursos de IA",
+    description: "Cobre os custos de processamento de inteligência artificial para geração automática de relatórios.",
   },
   {
-    icon: Bot,
-    title: "Automação com IA",
-    description: "Otimize rotinas repetitivas, geração de relatórios e a alocação inteligente de professores com inteligência artificial.",
-  },
-  {
-    icon: Sparkles,
-    title: "Atendimento Prioritário",
-    description: "Acesso direto a um gerente de contas dedicado e suporte técnico VIP via chat prioritário e telefone.",
+    icon: Code2,
+    title: "Desenvolvimento Contínuo",
+    description: "Permite dedicar mais horas no desenvolvimento de novas funcionalidades e correções de bugs.",
   },
 ];
 
-const pricingTiers = [
-  {
-    name: "Pro",
-    price: "R$ 299",
-    period: "/mês",
-    description: "Para instituições em crescimento que buscam mais poder e automação no dia a dia.",
-    features: [
-      "Até 5 instituições ou campi",
-      "Dashboards e Relatórios Avançados",
-      "Suporte VIP via Email e Chat",
-      "Exportação ilimitada de dados",
-    ],
-    cta: "Começar com Pro",
-    featured: false,
-  },
-  {
-    name: "Enterprise",
-    price: "Customizado",
-    period: "",
-    description: "Soluções sob medida para grandes redes de ensino com alta demanda e integrações personalizadas.",
-    features: [
-      "Instituições e campi ilimitados",
-      "Automação avançada com IA",
-      "Suporte Prioritário 24/7",
-      "Gerente de conta dedicado",
-      "Treinamento para equipes",
-    ],
-    cta: "Fale com um especialista",
-    featured: true,
-  },
-];
+export default function ApoiePage() {
+  const [copied, setCopied] = useState(false);
 
-export default function PremiumPage() {
+  const handleCopyPix = () => {
+    navigator.clipboard.writeText(PIX_PAYLOAD);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-background selection:bg-primary/20 selection:text-primary">
-      {/* Background Subtle Glows */}
+      {/* Glow de Fundo */}
       <div className="pointer-events-none absolute inset-0 flex justify-center overflow-hidden">
         <div className="h-[500px] w-[600px] -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
       </div>
@@ -73,8 +60,8 @@ export default function PremiumPage() {
       <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border/40 bg-background/60 px-4 backdrop-blur-md sm:px-8">
         <div className="flex items-center gap-2">
           <span className="text-xl font-extrabold tracking-tight">SGE</span>
-          <Badge variant="secondary" className="bg-primary/10 font-semibold text-primary border-primary/20">
-            <Sparkles className="mr-1 h-3 w-3" /> Premium
+          <Badge variant="secondary" className="bg-rose-500/10 font-semibold text-rose-500 border-rose-500/20 gap-1">
+            <Heart className="h-3 w-3 fill-rose-500" /> Apoie o Projeto
           </Badge>
         </div>
         <Button asChild variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
@@ -87,132 +74,114 @@ export default function PremiumPage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative py-20 text-center sm:py-28 lg:py-36">
+        <section className="relative py-16 text-center sm:py-24">
           <div className="container relative z-10 mx-auto px-4">
             <Badge
               variant="outline"
-              className="mb-6 inline-flex items-center gap-1.5 rounded-full border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary transition-colors hover:bg-primary/10"
+              className="mb-6 inline-flex items-center gap-1.5 rounded-full border-primary/30 bg-primary/5 px-4 py-1.5 text-sm text-primary"
             >
-              <ShieldCheck className="h-4 w-4" /> A evolução da sua gestão acadêmica
+              <Sparkles className="h-4 w-4" /> Mantendo a plataforma viva e independente
             </Badge>
 
-            <h1 className="mx-auto max-w-4xl text-4xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl">
-              Eleve sua Gestão a um{" "}
-              <span className="bg-gradient-to-r from-primary via-purple-500 to-indigo-500 bg-clip-text text-transparent">
-                Novo Patamar
+            <h1 className="mx-auto max-w-4xl text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+              Gostou da ferramenta? <br className="hidden sm:inline" />
+              <span className="bg-gradient-to-r from-primary via-purple-500 to-rose-500 bg-clip-text text-transparent">
+                Considere fazer uma doação
               </span>
             </h1>
 
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl">
-              Desbloqueie ferramentas poderosas de automação, análise predictiva com IA e suporte exclusivo para escalar sua instituição.
+            <p className="mx-auto mt-6 max-w-2xl text-base text-muted-foreground sm:text-lg leading-relaxed">
+              O SGE é desenvolvido de forma independente para modernizar a gestão educacional. Qualquer valor doado ajuda diretamente a custear a infraestrutura de servidores e o desenvolvimento de novas automações.
             </p>
-
-            <div className="mt-10 flex items-center justify-center gap-4">
-              <Button size="lg" className="group h-12 px-8 text-base shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30">
-                <Rocket className="mr-2 h-5 w-5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                Quero ser Premium
-              </Button>
-            </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="relative border-y border-border/40 bg-muted/20 py-20 sm:py-28 backdrop-blur-sm">
+        {/* Seção Principal Pix & QR Code */}
+        <section className="pb-20">
           <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl text-center">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Tudo o que sua rede precisa para crescer
-              </h2>
-              <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-                Recursos construídos sob medida para garantir eficiência operacional, segurança e inteligência no dia a dia.
-              </p>
-            </div>
+            <Card className="mx-auto max-w-3xl overflow-hidden border-border/60 bg-card/60 backdrop-blur-md shadow-2xl shadow-primary/5">
+              <CardHeader className="border-b border-border/40 bg-muted/30 p-6 text-center">
+                <CardTitle className="text-xl font-semibold flex items-center justify-center gap-2">
+                  <QrCode className="h-5 w-5 text-primary" /> Faça sua contribuição via Pix
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Escaneie o código abaixo com o aplicativo do seu banco ou copie a chave do tipo Copia e Cola.
+                </CardDescription>
+              </CardHeader>
 
-            <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {features.map((feature) => (
-                <Card
-                  key={feature.title}
-                  className="group relative overflow-hidden border-border/50 bg-background/50 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5"
-                >
-                  <CardHeader>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                      <feature.icon className="h-6 w-6" />
-                    </div>
-                    <CardTitle className="mt-4 text-xl">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
+              <CardContent className="flex flex-col items-center gap-8 p-6 sm:p-10">
+                {/* QR Code */}
+                <div className="relative flex flex-col items-center justify-center rounded-2xl border border-border/60 bg-white p-4 shadow-sm">
+                  <Image
+                    src="/pix-qrcode.jpeg" // Salve a imagem do QR code na pasta /public da sua aplicação com esse nome
+                    alt="QR Code Pix"
+                    width={220}
+                    height={220}
+                    className="rounded-lg"
+                  />
+                  <span className="mt-2 text-[11px] font-mono text-slate-500">Alan Johnny de Andrade</span>
+                </div>
 
-        {/* Pricing Section */}
-        <section className="py-20 sm:py-28">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl text-center">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Planos transparentes e escaláveis</h2>
-              <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-                Escolha a opção ideal para o momento atual e escale conforme sua instituição expande.
-              </p>
-            </div>
-
-            <div className="mt-16 grid max-w-lg gap-8 mx-auto lg:max-w-4xl lg:grid-cols-2">
-              {pricingTiers.map((tier) => (
-                <Card
-                  key={tier.name}
-                  className={`relative flex flex-col justify-between overflow-hidden border-border/60 transition-all duration-300 ${
-                    tier.featured
-                      ? "border-primary/80 bg-background shadow-2xl shadow-primary/10 ring-1 ring-primary/50"
-                      : "bg-background/60 backdrop-blur-sm"
-                  }`}
-                >
-                  {tier.featured && (
-                    <div className="absolute right-0 top-0">
-                      <span className="flex items-center gap-1 rounded-bl-xl bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-                        <Sparkles className="h-3 w-3" /> Mais Popular
-                      </span>
-                    </div>
-                  )}
-
-                  <CardHeader className="p-8 pb-4">
-                    <CardTitle className="text-2xl font-bold">{tier.name}</CardTitle>
-                    <CardDescription className="min-h-[40px] mt-2 text-sm">{tier.description}</CardDescription>
-                    
-                    <div className="mt-6 flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold tracking-tight">{tier.price}</span>
-                      {tier.period && <span className="text-muted-foreground font-medium">{tier.period}</span>}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="flex-1 p-8 pt-4">
-                    <div className="my-6 border-t border-border/40" />
-
-                    <ul className="space-y-3.5">
-                      {tier.features.map((feature) => (
-                        <li key={feature} className="flex items-center gap-3 text-sm">
-                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Check className="h-3.5 w-3.5" />
-                          </div>
-                          <span className="text-foreground/90">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-
-                  <div className="p-8 pt-0 mt-auto">
+                {/* Copia e Cola */}
+                <div className="w-full space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground block text-center">
+                    Pix Copia e Cola:
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 p-2 pl-3">
+                    <input
+                      type="text"
+                      readOnly
+                      value={PIX_PAYLOAD}
+                      className="w-full bg-transparent text-xs font-mono text-muted-foreground focus:outline-none truncate"
+                    />
                     <Button
-                      className={`w-full h-11 text-base font-medium ${
-                        tier.featured ? "shadow-md shadow-primary/20" : ""
-                      }`}
-                      variant={tier.featured ? "default" : "outline"}
-                      size="lg"
+                      onClick={handleCopyPix}
+                      size="sm"
+                      className="shrink-0 gap-1.5 font-medium transition-all"
                     >
-                      {tier.cta}
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4 text-emerald-400" /> Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" /> Copiar Código
+                        </>
+                      )}
                     </Button>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* Como sua doação ajuda */}
+        <section className="border-t border-border/40 bg-muted/20 py-20 backdrop-blur-sm">
+          <div className="container mx-auto px-4">
+            <div className="mx-auto max-w-3xl text-center mb-12">
+              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Para onde vai o valor investido?
+              </h2>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Toda contribuição é reinvestida integralmente para manter o projeto rápido, seguro e funcional.
+              </p>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto">
+              {impactItems.map((item) => (
+                <Card key={item.title} className="border-border/50 bg-background/50 backdrop-blur-sm">
+                  <CardHeader className="pb-2">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-primary/10 text-primary mb-2">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <CardTitle className="text-base font-semibold">{item.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {item.description}
+                    </p>
+                  </CardContent>
                 </Card>
               ))}
             </div>
@@ -222,8 +191,10 @@ export default function PremiumPage() {
 
       {/* Footer */}
       <footer className="border-t border-border/40 bg-muted/20 py-8 backdrop-blur-sm">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} SGE Acadêmico. Todos os direitos reservados.</p>
+        <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
+          <p className="flex items-center justify-center gap-1">
+            Desenvolvido com <Coffee className="h-3.5 w-3.5 text-amber-500" /> por Alan Johnny. Muito obrigado pelo seu apoio!
+          </p>
         </div>
       </footer>
     </div>

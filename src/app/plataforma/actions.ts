@@ -15,8 +15,7 @@ function getAdminClient() {
 // Confirma que quem chama é platform admin. O layout.tsx já faz essa
 // checagem na navegação — isso aqui é defesa em profundidade: uma Server
 // Action pode, em tese, ser invocada sem passar pela renderização da
-// página (ex: alguém com o bundle do client tentando chamar a action
-// direto). Nunca confiar só na guarda de navegação para uma ação que usa
+// página. Nunca confiar só na guarda de navegação para uma ação que usa
 // service_role.
 async function assertPlatformAdmin() {
   const supabase = await createClient();
@@ -31,10 +30,14 @@ async function assertPlatformAdmin() {
   return user;
 }
 
+// =============================================================================
+// Visão geral (/plataforma)
+// =============================================================================
+
 export type PlatformOverview = {
   totalInstitutions: number;
   totalUsers: number;
-  recentInstitutions: { id: string; name: string; created_at: string }[];
+  recentInstitutions: { id: string; name: string; city: string | null; state: string | null; created_at: string }[];
 };
 
 export async function getPlatformOverviewAction(): Promise<PlatformOverview> {
@@ -48,7 +51,7 @@ export async function getPlatformOverviewAction(): Promise<PlatformOverview> {
     admin.from("memberships").select("user_id", { count: "exact", head: true }),
     admin
       .from("institutions")
-      .select("id, name, created_at")
+      .select("id, name, city, state, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -59,12 +62,112 @@ export async function getPlatformOverviewAction(): Promise<PlatformOverview> {
 
   return {
     totalInstitutions: institutionsCount.count ?? 0,
-    // Nota: isso conta memberships, não usuários únicos (uma pessoa com
-    // duas instituições conta duas vezes aqui). Refinar para count(DISTINCT
-    // user_id) fica para quando a página de /plataforma/usuarios for
-    // construída de verdade — por ora é só uma métrica aproximada de visão
-    // geral, não uma fonte de verdade.
     totalUsers: usersCount.count ?? 0,
     recentInstitutions: recent.data ?? [],
+  };
+}
+
+// =============================================================================
+// Lista de instituições (/plataforma/instituicoes)
+// =============================================================================
+
+export type InstitutionListItem = {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  created_at: string;
+  memberCount: number;
+};
+
+export async function listInstitutionsAction(query?: string): Promise<InstitutionListItem[]> {
+  await assertPlatformAdmin();
+
+  const admin = getAdminClient();
+  if (!admin) throw new Error("Configuração de servidor ausente (service role).");
+
+  let q = admin
+    .from("institutions")
+    .select("id, name, city, state, created_at, memberships(id)")
+    .order("created_at", { ascending: false });
+
+  if (query) {
+    q = q.ilike("name", `%${query}%`);
+  }
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((inst) => ({
+    id: inst.id,
+    name: inst.name,
+    city: inst.city,
+    state: inst.state,
+    created_at: inst.created_at,
+    memberCount: Array.isArray(inst.memberships) ? inst.memberships.length : 0,
+  }));
+}
+
+// =============================================================================
+// Drill-down de uma instituição (/plataforma/instituicoes/[id])
+// =============================================================================
+
+export type InstitutionDetail = {
+  institution: { id: string; name: string; city: string | null; state: string | null; created_at: string };
+  members: { id: string; name: string; email: string; role: string }[];
+  counts: { polos: number; courses: number; classes: number; students: number };
+};
+
+export async function getInstitutionDetailAction(institutionId: string): Promise<InstitutionDetail | null> {
+  const user = await assertPlatformAdmin();
+
+  const admin = getAdminClient();
+  if (!admin) throw new Error("Configuração de servidor ausente (service role).");
+
+  const institutionRes = await admin
+    .from("institutions")
+    .select("id, name, city, state, created_at")
+    .eq("id", institutionId)
+    .maybeSingle();
+
+  if (institutionRes.error) throw new Error(institutionRes.error.message);
+  if (!institutionRes.data) return null;
+
+  const [membersRes, poloRes, courseRes, classRes, studentRes] = await Promise.all([
+    admin
+      .from("memberships")
+      .select("id, role, profiles!inner(full_name, email)")
+      .eq("institution_id", institutionId),
+    admin.from("polos").select("id", { count: "exact", head: true }).eq("institution_id", institutionId),
+    admin.from("courses").select("id", { count: "exact", head: true }).eq("institution_id", institutionId),
+    admin.from("classes").select("id", { count: "exact", head: true }).eq("institution_id", institutionId),
+    admin.from("students").select("id", { count: "exact", head: true }).eq("institution_id", institutionId),
+  ]);
+
+  if (membersRes.error) throw new Error(membersRes.error.message);
+
+  await admin.from("platform_audit_log").insert({
+    actor_user_id: user.id,
+    action: "view_institution_detail",
+    target_institution_id: institutionId,
+  });
+
+  return {
+    institution: institutionRes.data,
+    members: (membersRes.data ?? []).map((m) => {
+      const profile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+      return {
+        id: m.id,
+        name: profile?.full_name ?? "—",
+        email: profile?.email ?? "—",
+        role: m.role,
+      };
+    }),
+    counts: {
+      polos: poloRes.count ?? 0,
+      courses: courseRes.count ?? 0,
+      classes: classRes.count ?? 0,
+      students: studentRes.count ?? 0,
+    },
   };
 }

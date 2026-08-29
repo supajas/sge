@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ShieldCheck } from "lucide-react";
-import { AdminLogoutButton } from "@/components/admin-logout-button"; // componente criado abaixo
+import { AdminLogoutButton } from "@/components/admin-logout-button";
+import { PlataformaShell } from "./plataforma-shell";
 
+// Diferente do layout de instituições (que depende de useTenant()),
+// este layout não tem TenantProvider por baixo — é uma árvore de rota
+// separada, sem nenhum conceito de "instituição ativa". É um Server
+// Component: a checagem roda no servidor antes de qualquer HTML chegar.
 export default async function PlataformaLayout({
   children,
 }: {
@@ -24,23 +28,24 @@ export default async function PlataformaLayout({
     redirect("/dashboard");
   }
 
+  // Busca se o platform admin também é membro de alguma instituição
+  // para exibir o link "Voltar para minha instituição" na barra superior.
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Topbar isolada do Platform Admin */}
-      <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-        <div className="flex items-center gap-2 font-semibold text-foreground">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <span>Platform Admin</span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-muted-foreground">{user.email}</span>
-          <AdminLogoutButton />
-        </div>
-      </header>
-
-      {/* Conteúdo das páginas filhas */}
-      <main className="flex-1">{children}</main>
+    <div className="platform-theme min-h-screen bg-background">
+      <PlataformaShell
+        userEmail={user.email ?? ""}
+        hasMembership={!!membership}
+        logoutButton={<AdminLogoutButton />}
+      >
+        {children}
+      </PlataformaShell>
     </div>
   );
 }

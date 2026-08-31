@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Building2, Users, ChevronRight, Calendar, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { listInstitutionsAction } from "../actions";
-import { SearchInstitutions } from "./search-institutions";
+import { SearchInstitutions } from "./components/search-institutions";
 
 interface InstituicoesListPageProps {
   searchParams: Promise<{ q?: string }>;

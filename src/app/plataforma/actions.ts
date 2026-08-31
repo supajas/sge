@@ -171,3 +171,129 @@ export async function getInstitutionDetailAction(institutionId: string): Promise
     },
   };
 }
+
+// -----------------------------------------------------------------------------
+// ADICIONAR ao final de src/app/plataforma/actions.ts (não substitui nada
+// existente — soma duas funções novas ao arquivo que você já tem).
+// -----------------------------------------------------------------------------
+
+// =============================================================================
+// Busca de usuários (/plataforma/usuarios) — só leitura, nunca concede ou
+// revoga platform admin (essa decisão continua travada, só via SQL Editor —
+// ver migration da Parte 3.1). Toda busca bem-sucedida grava no audit log:
+// ver e-mail + vínculos institucionais de alguém é dado sensível o
+// suficiente para registrar, mesmo sendo leitura.
+// =============================================================================
+
+export type UserSearchResult = {
+  id: string;
+  email: string;
+  createdAt: string;
+  isPlatformAdmin: boolean;
+  memberships: { institutionId: string; institutionName: string; role: string }[];
+};
+
+export async function searchUsersAction(query: string): Promise<UserSearchResult[]> {
+  const actor = await assertPlatformAdmin();
+
+  const admin = getAdminClient();
+  if (!admin) throw new Error("Configuração de servidor ausente (service role).");
+
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+
+  // auth.users não é consultável via PostgREST direto — usa a Admin Auth
+  // API e filtra em memória (mesmo padrão já usado no script de bootstrap
+  // de senha de automação).
+  const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (listError) throw new Error(listError.message);
+
+  const matched = usersPage.users.filter((u) =>
+    u.email?.toLowerCase().includes(trimmed.toLowerCase())
+  );
+  if (matched.length === 0) return [];
+
+  const userIds = matched.map((u) => u.id);
+
+  const [membershipsRes, platformAdminsRes] = await Promise.all([
+    admin.from("memberships").select("user_id, role, institutions(id, name)").in("user_id", userIds),
+    admin.from("platform_admins").select("user_id").in("user_id", userIds),
+  ]);
+
+  if (membershipsRes.error) throw new Error(membershipsRes.error.message);
+  if (platformAdminsRes.error) throw new Error(platformAdminsRes.error.message);
+
+  const platformAdminIds = new Set((platformAdminsRes.data ?? []).map((p: any) => p.user_id));
+
+  await admin.from("platform_audit_log").insert({
+    actor_user_id: actor.id,
+    action: "search_users",
+    metadata: { query: trimmed, result_count: matched.length },
+  });
+
+  return matched.map((u) => ({
+    id: u.id,
+    email: u.email ?? "—",
+    createdAt: u.created_at,
+    isPlatformAdmin: platformAdminIds.has(u.id),
+    memberships: (membershipsRes.data ?? [])
+      .filter((m: any) => m.user_id === u.id)
+      .map((m: any) => ({
+        institutionId: m.institutions?.id ?? "",
+        institutionName: m.institutions?.name ?? "—",
+        role: m.role,
+      })),
+  }));
+}
+
+// =============================================================================
+// Log de auditoria (/plataforma/logs) — leitor do platform_audit_log.
+// DELIBERADAMENTE não é um log de infraestrutura (erros 500, deploys,
+// tentativas de login) — isso já é melhor coberto por Vercel Logs/Supabase
+// Logs. Isto aqui é só a trilha de "qual platform admin viu o quê", que só
+// existe porque a construímos de propósito.
+// =============================================================================
+
+export type AuditLogEntry = {
+  id: string;
+  actorEmail: string;
+  action: string;
+  targetInstitutionName: string | null;
+  targetUserId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export async function getPlatformAuditLogAction(limit = 50): Promise<AuditLogEntry[]> {
+  await assertPlatformAdmin();
+
+  const admin = getAdminClient();
+  if (!admin) throw new Error("Configuração de servidor ausente (service role).");
+
+  const { data: logs, error } = await admin
+    .from("platform_audit_log")
+    .select("id, actor_user_id, action, target_institution_id, target_user_id, metadata, created_at, institutions(name)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  if (!logs || logs.length === 0) return [];
+
+  // Resolve e-mail de quem agiu — mesmo motivo/padrão do searchUsersAction:
+  // auth.users não é consultável via PostgREST, só via Admin Auth API.
+  const { data: usersPage } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const emailById = new Map((usersPage?.users ?? []).map((u) => [u.id, u.email ?? "—"]));
+
+  return logs.map((l: any) => ({
+    id: l.id,
+    actorEmail: emailById.get(l.actor_user_id) ?? "—",
+    action: l.action,
+    targetInstitutionName: l.institutions?.name ?? null,
+    targetUserId: l.target_user_id,
+    metadata: l.metadata,
+    createdAt: l.created_at,
+  }));
+}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Building2, Users, ScrollText, BarChart3, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Building2, Users, ScrollText, ShieldCheck } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { title: "Instituições", url: "/plataforma/instituicoes", icon: Building2 },
   { title: "Usuários", url: "/plataforma/usuarios", icon: Users },
   { title: "Logs", url: "/plataforma/logs", icon: ScrollText },
-  { title: "Relatórios", url: "/plataforma/relatorios", icon: BarChart3 },
 ];
 
 export function PlataformaSidebar() {

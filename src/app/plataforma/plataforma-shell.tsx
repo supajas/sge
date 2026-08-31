@@ -20,7 +20,11 @@ export function PlataformaShell({
 }: PlataformaShellProps) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
+      {/* min-h-screen e bg-background já vêm do wrapper .platform-theme em
+          layout.tsx (o pai direto deste componente) — repetir aqui era
+          redundante (duas divs com a mesma altura mínima empilhadas), sem
+          efeito visual, só ruído no CSS. */}
+      <div className="flex w-full">
         {/* Sidebar da Plataforma */}
         <PlataformaSidebar />
 
@@ -44,8 +48,8 @@ export function PlataformaShell({
                   <span className="hidden sm:inline">Voltar para minha instituição</span>
                 </Link>
               )}
-              
-              <span className="hidden text-xs text-muted-foreground md:inline font-mono">
+
+              <span className="hidden font-mono text-xs text-muted-foreground md:inline">
                 {userEmail}
               </span>
 

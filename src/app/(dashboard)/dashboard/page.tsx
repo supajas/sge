@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { hasPermission, Permission } from "@/config/permissions";
 import { Can } from "@/components/auth/Can";
+import { HealthCheckCard } from "./components/health-check-card";
+import { PolosDistributionCard } from "./components/polos-distribution-card";
 
 export default function DashboardPage() {
   const active = useActiveTenant();
@@ -184,6 +186,11 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-6 grid gap-6 grid-cols-1 lg:grid-cols-2">
+          <HealthCheckCard />
+          <PolosDistributionCard />
         </div>
       </PageBody>
     </>

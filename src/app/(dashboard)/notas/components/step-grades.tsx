@@ -82,19 +82,17 @@ export function StepGrades({
   const { data, isLoading, error } = useQuery({
     queryKey: ["notas-grid", classId, subjectId, institutionId, userRole],
     queryFn: async () => {
-      const { data: subject, error: subErr } = await supabase
-        .from("subjects")
-        .select("id, is_active")
-        .eq("id", subjectId)
-        .single();
-
-      if (subErr) throw subErr;
-
-      if (isPoloCoordinator && !subject.is_active) {
-        return { isForbidden: true, fields: [], students: [], grades: [] };
-      }
-
-      const [tpl, students, grades] = await Promise.all([
+      const [subjectRes, classRes, tpl, students, grades] = await Promise.all([
+        supabase
+          .from("subjects")
+          .select("id, name, is_active")
+          .eq("id", subjectId)
+          .single(),
+        supabase
+          .from("classes")
+          .select("id, name")
+          .eq("id", classId)
+          .maybeSingle(),
         supabase
           .from("grade_templates")
           .select("id, grade_template_fields(id, label, kind, weight, max_value, order_index)")
@@ -109,6 +107,13 @@ export function StepGrades({
           .eq("subject_id", subjectId),
       ]);
 
+      if (subjectRes.error) throw subjectRes.error;
+      const subject = subjectRes.data;
+
+      if (isPoloCoordinator && !subject.is_active) {
+        return { isForbidden: true, fields: [], students: [], grades: [], subjectName: subject?.name, className: classRes.data?.name };
+      }
+
       if (tpl.error) throw tpl.error;
       if (students.error) throw students.error;
       if (grades.error) throw grades.error;
@@ -122,6 +127,8 @@ export function StepGrades({
         fields,
         students: (students.data ?? []) as Student[],
         grades: (grades.data ?? []) as Grade[],
+        subjectName: subject?.name ?? null,
+        className: classRes.data?.name ?? null,
       };
     },
   });
@@ -270,10 +277,10 @@ export function StepGrades({
     <Card>
       <CardContent className="p-4">
         {/* Cabeçalho */}
-        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-border/40 pb-3">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold">Lançamento de notas</h3>
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="secondary" className="gap-1 text-xs font-normal">
               <Save className="h-3 w-3" /> Salvamento automático
             </Badge>
           </div>

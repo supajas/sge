@@ -168,11 +168,16 @@ function NotasPageContent() {
   }
 
   if (subjectId && classId) {
+    const selectedSubject = subjects.find((s) => s.id === subjectId);
+
+    const headerTitle = selectedSubject ? `Lançamento de Notas — ${selectedSubject.name}` : "Lançamento de Notas";
+    const headerDescription = "Preencha ou edite as notas dos alunos para a disciplina selecionada.";
+
     return (
       <>
         <PageHeader
-          title="Lançamento de Notas"
-          description="Preencha ou edite as notas para a disciplina e turma selecionada."
+          title={headerTitle}
+          description={headerDescription}
         />
         <PageBody>
           <Button

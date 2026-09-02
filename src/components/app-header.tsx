@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Moon, Sun, ChevronsUpDown, Check } from "lucide-react";
+import { LogOut, Moon, Sun, ChevronsUpDown, Check, CircleHelp } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,7 +72,12 @@ export function AppHeader({
           </DropdownMenu>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
+        <Button variant="ghost" size="icon" asChild title="Central de Ajuda & Guia do Sistema">
+          <Link href="/ajuda">
+            <CircleHelp className="h-4 w-4 text-muted-foreground transition-colors hover:text-foreground" />
+          </Link>
+        </Button>
         <Button variant="ghost" size="icon" onClick={toggle} aria-label="Alternar tema">
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>

@@ -280,7 +280,7 @@ export function HealthCheckCard() {
               ) : (
                 <Badge variant="destructive" className="bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20">
                   <AlertCircle className="mr-1 h-3 w-3" />
-                  {totalMissingGrades} Campos de notas Vazios
+                  {totalMissingGrades} Campos de notas vazios
                 </Badge>
               )
             )}
@@ -329,7 +329,7 @@ export function HealthCheckCard() {
                               className="border-emerald-500/30 text-emerald-400 bg-emerald-500/5 text-[11px] font-normal"
                             >
                               <CheckCircle2 className="mr-1 h-3 w-3" />
-                              0 pendências
+                              0 Campos de notas vazios
                             </Badge>
                           ) : (
                             <Badge
@@ -337,7 +337,7 @@ export function HealthCheckCard() {
                               className="border-amber-500/30 text-amber-400 bg-amber-500/5 text-[11px] font-normal"
                             >
                               <Clock className="mr-1 h-3 w-3" />
-                              {fs.missingCount.toLocaleString("pt-BR")} Campos de notas Vazios
+                              {fs.missingCount.toLocaleString("pt-BR")} Campos de notas vazios
                             </Badge>
                           )}
                         </div>

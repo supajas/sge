@@ -23,6 +23,28 @@ type FieldStat = {
   totalExpected: number;
 };
 
+// Auxiliar para gerar textos amigáveis de acordo com o tipo de avaliação
+function getFieldStatusLabel(kind: string, label: string, missingCount: number) {
+  if (missingCount === 0) return "Concluído";
+
+  const lower = (label || "").toLowerCase();
+
+  if (kind === "regular" || lower.includes("regular")) {
+    return `${missingCount.toLocaleString("pt-BR")} Pendentes`;
+  }
+  if (lower.includes("reposi")) {
+    return `${missingCount.toLocaleString("pt-BR")} Aguardando exames`;
+  }
+  if (lower.includes("final")) {
+    return `${missingCount.toLocaleString("pt-BR")} Em aberto`;
+  }
+  if (lower.includes("repercurso")) {
+    return `${missingCount.toLocaleString("pt-BR")} Casos especiais`;
+  }
+
+  return `${missingCount.toLocaleString("pt-BR")} A lançar`;
+}
+
 export function HealthCheckCard() {
   const active = useActiveTenant();
 
@@ -227,6 +249,12 @@ export function HealthCheckCard() {
 
   const isComplete = totalMissingGrades === 0;
 
+  // Busca o total de pendências focando na Avaliação Regular para o Badge principal
+  const regularField = fieldStats.find(
+    (f) => f.kind === "regular" || f.label.toLowerCase().includes("regular")
+  );
+  const regularMissing = regularField ? regularField.missingCount : totalMissingGrades;
+
   return (
     <Card className="group relative overflow-hidden border-border/50 bg-card/60 transition-all duration-300 hover:border-primary/40 hover:bg-card hover:shadow-md hover:shadow-primary/5">
       <CardHeader className="pb-3">
@@ -238,7 +266,7 @@ export function HealthCheckCard() {
             <div>
               <div className="flex items-center gap-1.5">
                 <CardTitle className="text-base font-semibold tracking-tight">
-                  Health Check Operacional
+                  Acompanhamento de Lançamentos
                 </CardTitle>
                 <TooltipProvider>
                   <Tooltip>
@@ -248,13 +276,13 @@ export function HealthCheckCard() {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs text-xs">
-                      Contagem de campos de notas vazios por tipo de avaliação para discentes com status ativo.
+                      Acompanhamento em tempo real do progresso de digitação de notas de discentes ativos por etapa de avaliação.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
               <p className="text-xs text-muted-foreground">
-                Pendências de lançamento por tipo de avaliação (alunos ativos)
+                Progresso de lançamento de notas por etapa (discentes ativos)
               </p>
             </div>
           </div>
@@ -275,12 +303,12 @@ export function HealthCheckCard() {
               isComplete ? (
                 <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20">
                   <CheckCircle2 className="mr-1 h-3 w-3" />
-                  Todas as Notas Digitadas (100%)
+                  Lançamentos Concluídos (100%)
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20">
                   <AlertCircle className="mr-1 h-3 w-3" />
-                  {totalMissingGrades} Campos de notas vazios
+                  {regularMissing > 0 ? `${regularMissing} Pendências na Av. Regular` : `${totalMissingGrades} A lançar`}
                 </Badge>
               )
             )}
@@ -312,6 +340,8 @@ export function HealthCheckCard() {
                     ? Math.round(((fs.totalExpected - fs.missingCount) / fs.totalExpected) * 100)
                     : 100;
 
+                  const statusLabel = getFieldStatusLabel(fs.kind, fs.label, fs.missingCount);
+
                   return (
                     <div
                       key={fs.id}
@@ -329,7 +359,7 @@ export function HealthCheckCard() {
                               className="border-emerald-500/30 text-emerald-400 bg-emerald-500/5 text-[11px] font-normal"
                             >
                               <CheckCircle2 className="mr-1 h-3 w-3" />
-                              0 Campos de notas vazios
+                              Concluído
                             </Badge>
                           ) : (
                             <Badge
@@ -337,7 +367,7 @@ export function HealthCheckCard() {
                               className="border-amber-500/30 text-amber-400 bg-amber-500/5 text-[11px] font-normal"
                             >
                               <Clock className="mr-1 h-3 w-3" />
-                              {fs.missingCount.toLocaleString("pt-BR")} Campos de notas vazios
+                              {statusLabel}
                             </Badge>
                           )}
                         </div>

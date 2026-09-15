@@ -141,9 +141,13 @@ export function StepGrades({
 
   const upsert = useMutation({
     mutationFn: async (v: { studentId: string; field: Field; value: string }) => {
-      // Tratamento para aceitar vírgula (7,5) e converter para número válido
-      const rawVal = v.value.replace(",", ".").trim();
-      const numericVal = rawVal === "" ? null : Number(rawVal);
+      const isStatusField = v.field.kind === "status";
+      
+      let numericVal: number | null = null;
+      if (!isStatusField) {
+        const rawVal = v.value.replace(",", ".").trim();
+        numericVal = rawVal === "" || isNaN(Number(rawVal)) ? null : Number(rawVal);
+      }
 
       const payload = {
         institution_id: institutionId,
@@ -151,8 +155,8 @@ export function StepGrades({
         subject_id: subjectId,
         student_id: v.studentId,
         template_field_id: v.field.id,
-        value: v.field.kind === "status" ? null : isNaN(numericVal!) ? null : numericVal,
-        status_value: v.field.kind === "status" ? v.value || null : null,
+        value: isStatusField ? null : numericVal,
+        status_value: isStatusField ? v.value.trim() || null : null,
       };
 
       const { error } = await supabase
@@ -168,8 +172,12 @@ export function StepGrades({
       });
     },
     onError: (e: Error) => {
-      // Intercepta a porta de RLS do Supabase
-      if (e.message?.toLowerCase().includes("row-level security")) {
+      const isRlsError = 
+        e.message?.toLowerCase().includes("row-level security") || 
+        e.message?.toLowerCase().includes("rls") ||
+        (e as any).code === "42501";
+
+      if (isRlsError) {
         toast.error("Sem permissão para alterar", {
           description: "Seu perfil possui acesso apenas para visualização e não pode editar as notas.",
           duration: 6000,

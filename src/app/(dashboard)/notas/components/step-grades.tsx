@@ -46,6 +46,12 @@ type Grade = {
   status_value: string | null;
 };
 
+// Formata o número vindo do banco (ex: 4 -> "4,00", 8.8 -> "8,80")
+function formatGradeValue(val: number | null | undefined): string {
+  if (val == null || isNaN(Number(val))) return "";
+  return Number(val).toFixed(2).replace(".", ",");
+}
+
 function computeAverage(fields: Field[], studentId: string, gradeMap: Map<string, Grade>) {
   const scores = fields.filter((f) => f.kind === "score" && f.weight > 0);
   if (!scores.length) return null;
@@ -217,10 +223,10 @@ export function StepGrades({
 
       data.fields.forEach((f) => {
         if (f.kind === "average") {
-          row[f.id] = computedAverage != null ? computedAverage.toFixed(2) : "—";
+          row[f.id] = computedAverage != null ? computedAverage.toFixed(2).replace(".", ",") : "—";
         } else {
           const g = gradeMap.get(`${s.id}:${f.id}`);
-          row[f.id] = f.kind === "status" ? g?.status_value ?? "—" : g?.value ?? "—";
+          row[f.id] = f.kind === "status" ? g?.status_value ?? "—" : formatGradeValue(g?.value) || "—";
         }
       });
 
@@ -325,7 +331,9 @@ export function StepGrades({
                       {fields.map((f) => {
                         const g = gradeMap.get(`${s.id}:${f.id}`);
                         const displayVal =
-                          f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
+                          f.kind === "status"
+                            ? g?.status_value ?? ""
+                            : formatGradeValue(g?.value);
 
                         if (f.kind === "average") {
                           return (
@@ -335,7 +343,7 @@ export function StepGrades({
                             >
                               <Label className="text-xs font-medium">{f.label}</Label>
                               <span className="text-sm font-semibold">
-                                {computedAverage != null ? computedAverage.toFixed(2) : "—"}
+                                {computedAverage != null ? computedAverage.toFixed(2).replace(".", ",") : "—"}
                               </span>
                             </div>
                           );
@@ -360,6 +368,19 @@ export function StepGrades({
                               onBlur={(e) => {
                                 const newVal = e.target.value.trim();
                                 if (newVal === displayVal) return;
+
+                                if (f.kind === "score" && newVal !== "") {
+                                  const rawVal = newVal.replace(",", ".");
+                                  const num = Number(rawVal);
+                                  const maxLimit = f.max_value ?? 10;
+
+                                  if (isNaN(num) || num < 0 || num > maxLimit) {
+                                    toast.error(`A nota inserida deve estar entre 0 e ${maxLimit}.`);
+                                    e.target.value = displayVal;
+                                    return;
+                                  }
+                                }
+
                                 upsert.mutate({ studentId: s.id, field: f, value: newVal });
                               }}
                               className="h-9 w-20 shrink-0 text-center"
@@ -409,12 +430,15 @@ export function StepGrades({
                     {fields.map((f) => {
                       const g = gradeMap.get(`${s.id}:${f.id}`);
                       const displayVal =
-                        f.kind === "status" ? g?.status_value ?? "" : g?.value?.toString() ?? "";
+                        f.kind === "status"
+                          ? g?.status_value ?? ""
+                          : formatGradeValue(g?.value);
+
                       if (f.kind === "average") {
                         return (
                           <TableCell key={f.id} className="text-center">
                             <span className="inline-block rounded-md bg-muted px-2 py-1 text-sm font-medium">
-                              {computedAverage != null ? computedAverage.toFixed(2) : "—"}
+                              {computedAverage != null ? computedAverage.toFixed(2).replace(".", ",") : "—"}
                             </span>
                           </TableCell>
                         );
@@ -427,6 +451,19 @@ export function StepGrades({
                             onBlur={(e) => {
                               const newVal = e.target.value.trim();
                               if (newVal === displayVal) return;
+
+                              if (f.kind === "score" && newVal !== "") {
+                                const rawVal = newVal.replace(",", ".");
+                                const num = Number(rawVal);
+                                const maxLimit = f.max_value ?? 10;
+
+                                if (isNaN(num) || num < 0 || num > maxLimit) {
+                                  toast.error(`A nota inserida deve estar entre 0 e ${maxLimit}.`);
+                                  e.target.value = displayVal;
+                                  return;
+                                }
+                              }
+
                               upsert.mutate({ studentId: s.id, field: f, value: newVal });
                             }}
                             className="h-8 w-24 text-center mx-auto"
